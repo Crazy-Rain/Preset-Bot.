@@ -12,11 +12,24 @@
     "start_tag": "<think>",
     "end_tag": "</think>"
   },
+  "ai_config_options": {
+    "max_tokens": 4096,
+    "response_length": 1024,
+    "temperature": 1.0,
+    "top_p": 1.0,
+    "reasoning_enabled": false,
+    "reasoning_level": "Auto",
+    "use_presence_penalty": false,
+    "presence_penalty": 0.0,
+    "use_frequency_penalty": false,
+    "frequency_penalty": 0.0
+  },
   "characters": [
     {
       "name": "assistant",
       "display_name": "Assistant",
       "description": "You are a helpful assistant.",
+      "scenario": "",
       "avatar_url": "",
       "avatar_file": ""
     }
