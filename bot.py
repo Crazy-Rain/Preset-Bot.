@@ -557,7 +557,22 @@ class AIResponseHandler:
     def __init__(self, config_manager: ConfigManager):
         self.config_manager = config_manager
         self.client = None
+        self.log_callback = None
         self._initialize_client()
+    
+    def set_log_callback(self, callback):
+        """Set a callback function for logging (e.g., to GUI console)"""
+        self.log_callback = callback
+    
+    def _log(self, message, tag='info'):
+        """Internal logging method that uses callback if available"""
+        if self.log_callback:
+            try:
+                self.log_callback(message, tag)
+            except Exception as e:
+                print(f"Error in log callback: {str(e)}")
+        else:
+            print(message)
     
     def _initialize_client(self) -> None:
         """Initialize OpenAI client"""
@@ -689,6 +704,9 @@ class AIResponseHandler:
                 ai_config["frequency_penalty"] = config.get("frequency_penalty", 0.0)
         
         try:
+            # Log the request
+            self._log(f"Sending AI request to model '{model}' with message: {message[:100]}...", 'request')
+            
             response = await asyncio.to_thread(
                 self.client.chat.completions.create,
                 model=model,
@@ -700,9 +718,14 @@ class AIResponseHandler:
             # Remove thinking tags if enabled
             response_text = self.config_manager.remove_thinking_tags(response_text)
             
+            # Log the response
+            self._log(f"Received AI response: {response_text[:200]}...", 'response')
+            
             return response_text
         except Exception as e:
-            return f"Error getting AI response: {str(e)}"
+            error_msg = f"Error getting AI response: {str(e)}"
+            self._log(error_msg, 'error')
+            return error_msg
 
 
 class PresetBot(commands.Bot):
@@ -821,99 +844,106 @@ class PresetBot(commands.Bot):
             Usage: !chat [user_character_name]: "dialogue" action description
             Example: !chat Alice: "Hello there!" waves enthusiastically
             """
-            # Parse the message to extract dialogue and actions
-            # Format: !chat CharacterName: "What is being said" What is being Done
-            
-            # Get user character if specified, or use the last user character from this channel
-            user_char = None
-            user_char_info = ""
-            active_user_character = user_character
-            
-            # Build the chat message
-            channel_id = str(ctx.channel.id)
-            
-            # Get chat history limit from config
-            history_limit = self.config_manager.get_chat_history_limit()
-            
-            # If no user character specified, check if one was used recently in this channel
-            if not active_user_character:
+            try:
+                # Parse the message to extract dialogue and actions
+                # Format: !chat CharacterName: "What is being said" What is being Done
+                
+                # Get user character if specified, or use the last user character from this channel
+                user_char = None
+                user_char_info = ""
+                active_user_character = user_character
+                
+                # Build the chat message
+                channel_id = str(ctx.channel.id)
+                
+                # Get chat history limit from config
+                history_limit = self.config_manager.get_chat_history_limit()
+                
+                # If no user character specified, check if one was used recently in this channel
+                if not active_user_character:
+                    chat_history = self.config_manager.get_chat_history(channel_id)
+                    # Look through recent history for a user character
+                    for msg in reversed(chat_history[-history_limit:]):
+                        if msg.get("user_character") and msg.get("author") == str(ctx.author.id):
+                            active_user_character = msg.get("user_character")
+                            break
+                
+                # Get user character info if we have an active character
+                if active_user_character:
+                    user_char = self.config_manager.get_user_character_by_name(active_user_character)
+                    if user_char:
+                        # Build persona information from user character
+                        user_char_info = f"\n\nUser is playing as {user_char.get('display_name', active_user_character)}."
+                        if user_char.get('description'):
+                            user_char_info += f"\nCharacter description: {user_char.get('description')}"
+                
+                # Get channel chat history
                 chat_history = self.config_manager.get_chat_history(channel_id)
-                # Look through recent history for a user character
-                for msg in reversed(chat_history[-history_limit:]):
-                    if msg.get("user_character") and msg.get("author") == str(ctx.author.id):
-                        active_user_character = msg.get("user_character")
-                        break
-            
-            # Get user character info if we have an active character
-            if active_user_character:
-                user_char = self.config_manager.get_user_character_by_name(active_user_character)
-                if user_char:
-                    # Build persona information from user character
-                    user_char_info = f"\n\nUser is playing as {user_char.get('display_name', active_user_character)}."
-                    if user_char.get('description'):
-                        user_char_info += f"\nCharacter description: {user_char.get('description')}"
-            
-            # Get channel chat history
-            chat_history = self.config_manager.get_chat_history(channel_id)
-            
-            # Store this message in history
-            message_data = {
-                "author": str(ctx.author.id),
-                "author_name": str(ctx.author.name),
-                "user_character": active_user_character,  # Store the active character (may be inherited)
-                "content": message,
-                "type": "user",
-                "timestamp": ctx.message.created_at.isoformat()
-            }
-            self.config_manager.add_chat_message(channel_id, message_data)
-            
-            # Build context from recent history (using configured limit)
-            context_messages = []
-            for msg in chat_history[-history_limit:]:
-                if msg.get("type") == "user":
-                    char_prefix = f"[{msg.get('user_character', msg.get('author_name'))}] " if msg.get('user_character') else f"[{msg.get('author_name')}] "
-                    context_messages.append({
-                        "role": "user",
-                        "content": char_prefix + msg.get("content", "")
-                    })
-                elif msg.get("type") == "assistant":
-                    context_messages.append({
-                        "role": "assistant",
-                        "content": msg.get("content", "")
-                    })
-            
-            # Get AI response with context
-            # Use channel-specific character if set, otherwise use first character
-            channel_id = str(ctx.channel.id)
-            ai_character = self.config_manager.get_channel_character(channel_id)
-            if not ai_character and self.config_manager.get_characters():
-                ai_character = self.config_manager.get_characters()[0].get("name")
-            
-            # Pass user character info to AI handler to be included in system prompt
-            response = await self.ai_handler.get_ai_response(
-                message,
-                character_name=ai_character,
-                additional_context=context_messages,
-                user_character_info=user_char_info if user_char_info else None
-            )
-            
-            # Store AI response in history
-            response_data = {
-                "content": response,
-                "type": "assistant",
-                "timestamp": ctx.message.created_at.isoformat()
-            }
-            self.config_manager.add_chat_message(channel_id, response_data)
-            
-            # Send response via webhook if character is configured
-            if ai_character:
-                char = self.config_manager.get_character_by_name(ai_character)
-                if char:
-                    await self.send_via_webhook(ctx.channel, response, char)
-                    return
-            
-            # Otherwise send normally
-            await ctx.send(response)
+                
+                # Store this message in history
+                message_data = {
+                    "author": str(ctx.author.id),
+                    "author_name": str(ctx.author.name),
+                    "user_character": active_user_character,  # Store the active character (may be inherited)
+                    "content": message,
+                    "type": "user",
+                    "timestamp": ctx.message.created_at.isoformat()
+                }
+                self.config_manager.add_chat_message(channel_id, message_data)
+                
+                # Build context from recent history (using configured limit)
+                context_messages = []
+                for msg in chat_history[-history_limit:]:
+                    if msg.get("type") == "user":
+                        char_prefix = f"[{msg.get('user_character', msg.get('author_name'))}] " if msg.get('user_character') else f"[{msg.get('author_name')}] "
+                        context_messages.append({
+                            "role": "user",
+                            "content": char_prefix + msg.get("content", "")
+                        })
+                    elif msg.get("type") == "assistant":
+                        context_messages.append({
+                            "role": "assistant",
+                            "content": msg.get("content", "")
+                        })
+                
+                # Get AI response with context
+                # Use channel-specific character if set, otherwise use first character
+                channel_id = str(ctx.channel.id)
+                ai_character = self.config_manager.get_channel_character(channel_id)
+                if not ai_character and self.config_manager.get_characters():
+                    ai_character = self.config_manager.get_characters()[0].get("name")
+                
+                # Pass user character info to AI handler to be included in system prompt
+                response = await self.ai_handler.get_ai_response(
+                    message,
+                    character_name=ai_character,
+                    additional_context=context_messages,
+                    user_character_info=user_char_info if user_char_info else None
+                )
+                
+                # Store AI response in history
+                response_data = {
+                    "content": response,
+                    "type": "assistant",
+                    "timestamp": ctx.message.created_at.isoformat()
+                }
+                self.config_manager.add_chat_message(channel_id, response_data)
+                
+                # Send response via webhook if character is configured
+                if ai_character:
+                    char = self.config_manager.get_character_by_name(ai_character)
+                    if char:
+                        await self.send_via_webhook(ctx.channel, response, char)
+                        return
+                
+                # Otherwise send normally
+                await ctx.send(response)
+            except Exception as e:
+                error_msg = f"Error in chat command: {str(e)}"
+                print(error_msg)
+                import traceback
+                print(traceback.format_exc())
+                await ctx.send(f"An error occurred while processing your chat message: {str(e)}")
         
         @self.command(name='clearchat')
         @commands.has_permissions(administrator=True)
