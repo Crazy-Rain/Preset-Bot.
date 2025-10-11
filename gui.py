@@ -159,6 +159,16 @@ class PresetBotGUI:
         self.user_characters_frame = ttk.Frame(self.notebook)
         self.notebook.add(self.user_characters_frame, text="User Characters")
         self.create_user_characters_tab()
+        
+        # Lorebooks Tab
+        self.lorebooks_frame = ttk.Frame(self.notebook)
+        self.notebook.add(self.lorebooks_frame, text="Lorebooks")
+        self.create_lorebooks_tab()
+        
+        # Console Tab
+        self.console_frame = ttk.Frame(self.notebook)
+        self.notebook.add(self.console_frame, text="Console")
+        self.create_console_tab()
     
     def create_config_tab(self):
         """Create configuration tab"""
@@ -601,6 +611,7 @@ class PresetBotGUI:
     def test_openai(self):
         """Test OpenAI connection"""
         self.config_status_label.config(text="Testing OpenAI connection...", foreground="blue")
+        self.log_to_console("Testing OpenAI connection...", 'info')
         
         def test():
             try:
@@ -610,6 +621,8 @@ class PresetBotGUI:
                 if base_url and api_key:
                     self.config_manager.set_openai_config(base_url, api_key)
                     self.ai_handler.update_client()
+                
+                self.log_to_console(f"Sending test request to {base_url}", 'request')
                 
                 # Test with a simple message
                 loop = asyncio.new_event_loop()
@@ -621,12 +634,15 @@ class PresetBotGUI:
                 
                 if "Error" not in response:
                     self.config_status_label.config(text="OpenAI connection successful!", foreground="green")
+                    self.log_to_console(f"Response received: {response[:200]}...", 'response')
                     messagebox.showinfo("Success", f"Connection successful!\nResponse: {response[:100]}...")
                 else:
                     self.config_status_label.config(text="Connection failed", foreground="red")
+                    self.log_to_console(f"Error response: {response}", 'error')
                     messagebox.showerror("Error", response)
             except Exception as e:
                 self.config_status_label.config(text=f"Error: {str(e)}", foreground="red")
+                self.log_to_console(f"Connection failed: {str(e)}", 'error')
                 messagebox.showerror("Error", f"Connection failed: {str(e)}")
         
         threading.Thread(target=test, daemon=True).start()
@@ -690,6 +706,7 @@ class PresetBotGUI:
         self.config_manager.set_last_manual_send_target(server_id, channel_id)
         
         self.send_status_label.config(text="Sending message...", foreground="blue")
+        self.log_to_console(f"Preparing to send manual message to channel {channel_id} as {character}", 'info')
         
         def send():
             try:
@@ -697,11 +714,13 @@ class PresetBotGUI:
                 char_data = self.config_manager.get_character_by_name(character)
                 if not char_data:
                     self.send_status_label.config(text="Character not found", foreground="red")
+                    self.log_to_console(f"Character '{character}' not found", 'error')
                     messagebox.showerror("Error", f"Character '{character}' not found")
                     return
                 
                 # Skip AI processing - send message directly
                 # The message is sent as-is from the selected character
+                self.log_to_console(f"Message content: {message[:200]}...", 'info')
                 
                 # Initialize Discord client if needed
                 loop = asyncio.new_event_loop()
@@ -718,12 +737,15 @@ class PresetBotGUI:
                                 # Send via webhook - use the message directly without AI processing
                                 await self.send_via_webhook(channel, message, char_data)
                                 self.send_status_label.config(text=f"Message sent successfully!", foreground="green")
+                                self.log_to_console(f"Message sent successfully to channel {channel_id} as {char_data.get('display_name', character)}", 'info')
                                 messagebox.showinfo("Success", f"Message sent to channel {channel_id} as {char_data.get('display_name', character)}")
                             else:
                                 self.send_status_label.config(text="Channel not found", foreground="red")
+                                self.log_to_console(f"Channel {channel_id} not found", 'error')
                                 messagebox.showerror("Error", f"Channel {channel_id} not found")
                         except Exception as e:
                             self.send_status_label.config(text=f"Error: {str(e)}", foreground="red")
+                            self.log_to_console(f"Failed to send message: {str(e)}", 'error')
                             messagebox.showerror("Error", f"Failed to send message: {str(e)}")
                         finally:
                             await self.discord_client.close()
@@ -731,6 +753,7 @@ class PresetBotGUI:
                     token = self.config_manager.get_discord_token()
                     if not token:
                         self.send_status_label.config(text="Discord token not configured", foreground="red")
+                        self.log_to_console("Discord token not configured", 'error')
                         messagebox.showerror("Error", "Please configure Discord bot token first")
                         return
                     
@@ -740,6 +763,7 @@ class PresetBotGUI:
                 loop.close()
             except Exception as e:
                 self.send_status_label.config(text=f"Error: {str(e)}", foreground="red")
+                self.log_to_console(f"Failed to send message: {str(e)}", 'error')
                 messagebox.showerror("Error", f"Failed to send message: {str(e)}")
         
         threading.Thread(target=send, daemon=True).start()
@@ -1691,6 +1715,463 @@ class PresetBotGUI:
             description = char.get("description", "No description")
             desc_preview = description[:40] + "..." if len(description) > 40 else description
             self.user_characters_listbox.insert(tk.END, f"{display_name} ({name_id}): {desc_preview}")
+    
+    def create_lorebooks_tab(self):
+        """Create lorebooks management tab"""
+        
+        # Main container with horizontal split
+        main_paned = ttk.PanedWindow(self.lorebooks_frame, orient=tk.HORIZONTAL)
+        main_paned.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        # Left panel - Lorebook list
+        left_frame = ttk.Frame(main_paned)
+        main_paned.add(left_frame, weight=1)
+        
+        # Lorebook management
+        lorebook_mgmt_frame = ttk.LabelFrame(left_frame, text="Lorebook Management", padding=10)
+        lorebook_mgmt_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Add lorebook section
+        add_lb_frame = ttk.Frame(lorebook_mgmt_frame)
+        add_lb_frame.pack(fill=tk.X, pady=5)
+        
+        ttk.Label(add_lb_frame, text="New Lorebook:").pack(side=tk.LEFT, padx=5)
+        self.lorebook_name_entry = ttk.Entry(add_lb_frame, width=20)
+        self.lorebook_name_entry.pack(side=tk.LEFT, padx=5)
+        ttk.Button(add_lb_frame, text="Create", command=self.add_lorebook).pack(side=tk.LEFT, padx=5)
+        
+        # Lorebook list
+        list_frame = ttk.Frame(lorebook_mgmt_frame)
+        list_frame.pack(fill=tk.BOTH, expand=True, pady=10)
+        
+        scrollbar = ttk.Scrollbar(list_frame)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        self.lorebooks_listbox = tk.Listbox(list_frame, height=10, yscrollcommand=scrollbar.set)
+        self.lorebooks_listbox.pack(fill=tk.BOTH, expand=True, side=tk.LEFT)
+        scrollbar.config(command=self.lorebooks_listbox.yview)
+        self.lorebooks_listbox.bind('<<ListboxSelect>>', self.on_lorebook_select)
+        
+        # Lorebook action buttons
+        lb_button_frame = ttk.Frame(lorebook_mgmt_frame)
+        lb_button_frame.pack(fill=tk.X, pady=5)
+        
+        ttk.Button(lb_button_frame, text="Activate", command=self.activate_lorebook).pack(side=tk.LEFT, padx=5)
+        ttk.Button(lb_button_frame, text="Deactivate", command=self.deactivate_lorebook).pack(side=tk.LEFT, padx=5)
+        ttk.Button(lb_button_frame, text="Delete", command=self.delete_lorebook).pack(side=tk.LEFT, padx=5)
+        ttk.Button(lb_button_frame, text="Refresh", command=self.refresh_lorebooks_list).pack(side=tk.LEFT, padx=5)
+        
+        # Right panel - Entry management
+        right_frame = ttk.Frame(main_paned)
+        main_paned.add(right_frame, weight=2)
+        
+        # Entry management
+        entry_mgmt_frame = ttk.LabelFrame(right_frame, text="Entry Management", padding=10)
+        entry_mgmt_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Selected lorebook label
+        self.selected_lorebook_label = ttk.Label(entry_mgmt_frame, text="No lorebook selected", 
+                                                  font=('TkDefaultFont', 10, 'bold'))
+        self.selected_lorebook_label.pack(pady=5)
+        
+        # Add/Edit Entry section
+        entry_edit_frame = ttk.LabelFrame(entry_mgmt_frame, text="Add/Edit Entry", padding=10)
+        entry_edit_frame.pack(fill=tk.X, pady=5)
+        
+        # Entry content
+        ttk.Label(entry_edit_frame, text="Content:").grid(row=0, column=0, sticky=tk.NW, pady=5)
+        self.entry_content_text = scrolledtext.ScrolledText(entry_edit_frame, height=4, width=50)
+        self.entry_content_text.grid(row=0, column=1, columnspan=2, pady=5, padx=5, sticky=tk.EW)
+        
+        # Activation type
+        ttk.Label(entry_edit_frame, text="Activation Type:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        self.entry_activation_type = tk.StringVar(value="normal")
+        type_frame = ttk.Frame(entry_edit_frame)
+        type_frame.grid(row=1, column=1, sticky=tk.W, pady=5)
+        ttk.Radiobutton(type_frame, text="Constant (Always Active)", variable=self.entry_activation_type, 
+                       value="constant", command=self.on_activation_type_change).pack(anchor=tk.W)
+        ttk.Radiobutton(type_frame, text="Normal (Keyword Triggered)", variable=self.entry_activation_type, 
+                       value="normal", command=self.on_activation_type_change).pack(anchor=tk.W)
+        
+        # Keywords (for normal entries)
+        self.keywords_label = ttk.Label(entry_edit_frame, text="Keywords:")
+        self.keywords_label.grid(row=2, column=0, sticky=tk.W, pady=5)
+        self.entry_keywords_entry = ttk.Entry(entry_edit_frame, width=50)
+        self.entry_keywords_entry.grid(row=2, column=1, pady=5, padx=5, sticky=tk.EW)
+        ttk.Label(entry_edit_frame, text="(comma-separated)", font=('TkDefaultFont', 8, 'italic')).grid(
+            row=2, column=2, sticky=tk.W, padx=5)
+        
+        # Entry action buttons
+        entry_button_frame = ttk.Frame(entry_edit_frame)
+        entry_button_frame.grid(row=3, column=1, pady=10)
+        ttk.Button(entry_button_frame, text="Add Entry", command=self.add_entry).pack(side=tk.LEFT, padx=5)
+        ttk.Button(entry_button_frame, text="Update Entry", command=self.update_entry).pack(side=tk.LEFT, padx=5)
+        ttk.Button(entry_button_frame, text="Clear Form", command=self.clear_entry_form).pack(side=tk.LEFT, padx=5)
+        
+        # Entries list
+        entries_list_frame = ttk.LabelFrame(entry_mgmt_frame, text="Entries in Selected Lorebook", padding=10)
+        entries_list_frame.pack(fill=tk.BOTH, expand=True, pady=5)
+        
+        # Scrollbar for entries list
+        entries_scrollbar = ttk.Scrollbar(entries_list_frame)
+        entries_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        self.entries_listbox = tk.Listbox(entries_list_frame, height=10, yscrollcommand=entries_scrollbar.set)
+        self.entries_listbox.pack(fill=tk.BOTH, expand=True, side=tk.LEFT)
+        entries_scrollbar.config(command=self.entries_listbox.yview)
+        self.entries_listbox.bind('<<ListboxSelect>>', self.on_entry_select)
+        
+        # Entry management buttons
+        entry_mgmt_button_frame = ttk.Frame(entries_list_frame)
+        entry_mgmt_button_frame.pack(fill=tk.X, pady=5)
+        
+        ttk.Button(entry_mgmt_button_frame, text="Edit Selected", command=self.edit_entry).pack(side=tk.LEFT, padx=5)
+        ttk.Button(entry_mgmt_button_frame, text="Delete Selected", command=self.delete_entry).pack(side=tk.LEFT, padx=5)
+        ttk.Button(entry_mgmt_button_frame, text="Refresh", command=self.refresh_entries_list).pack(side=tk.LEFT, padx=5)
+        
+        # Initialize
+        self.current_lorebook = None
+        self.current_entry_index = None
+        self.refresh_lorebooks_list()
+        self.on_activation_type_change()
+    
+    def on_activation_type_change(self):
+        """Handle activation type change - show/hide keywords field"""
+        if self.entry_activation_type.get() == "constant":
+            self.keywords_label.config(state='disabled')
+            self.entry_keywords_entry.config(state='disabled')
+        else:
+            self.keywords_label.config(state='normal')
+            self.entry_keywords_entry.config(state='normal')
+    
+    def add_lorebook(self):
+        """Add a new lorebook"""
+        name = self.lorebook_name_entry.get().strip()
+        if not name:
+            messagebox.showwarning("Warning", "Please enter a lorebook name")
+            return
+        
+        # Check if lorebook already exists
+        if self.config_manager.get_lorebook_by_name(name):
+            messagebox.showerror("Error", f"Lorebook '{name}' already exists")
+            return
+        
+        self.config_manager.add_lorebook(name, active=True)
+        self.lorebook_name_entry.delete(0, tk.END)
+        self.refresh_lorebooks_list()
+        messagebox.showinfo("Success", f"Lorebook '{name}' created successfully!")
+    
+    def activate_lorebook(self):
+        """Activate selected lorebook"""
+        selection = self.lorebooks_listbox.curselection()
+        if not selection:
+            messagebox.showwarning("Warning", "Please select a lorebook")
+            return
+        
+        index = selection[0]
+        lorebooks = self.config_manager.get_lorebooks()
+        if index < len(lorebooks):
+            name = lorebooks[index]['name']
+            self.config_manager.toggle_lorebook_active(name, True)
+            self.refresh_lorebooks_list()
+            messagebox.showinfo("Success", f"Lorebook '{name}' activated")
+    
+    def deactivate_lorebook(self):
+        """Deactivate selected lorebook"""
+        selection = self.lorebooks_listbox.curselection()
+        if not selection:
+            messagebox.showwarning("Warning", "Please select a lorebook")
+            return
+        
+        index = selection[0]
+        lorebooks = self.config_manager.get_lorebooks()
+        if index < len(lorebooks):
+            name = lorebooks[index]['name']
+            self.config_manager.toggle_lorebook_active(name, False)
+            self.refresh_lorebooks_list()
+            messagebox.showinfo("Success", f"Lorebook '{name}' deactivated")
+    
+    def delete_lorebook(self):
+        """Delete selected lorebook"""
+        selection = self.lorebooks_listbox.curselection()
+        if not selection:
+            messagebox.showwarning("Warning", "Please select a lorebook to delete")
+            return
+        
+        index = selection[0]
+        lorebooks = self.config_manager.get_lorebooks()
+        if index < len(lorebooks):
+            name = lorebooks[index]['name']
+            if messagebox.askyesno("Confirm Delete", f"Are you sure you want to delete lorebook '{name}'?"):
+                self.config_manager.delete_lorebook(index)
+                self.current_lorebook = None
+                self.refresh_lorebooks_list()
+                self.refresh_entries_list()
+                messagebox.showinfo("Success", f"Lorebook '{name}' deleted")
+    
+    def refresh_lorebooks_list(self):
+        """Refresh the lorebooks list"""
+        self.lorebooks_listbox.delete(0, tk.END)
+        lorebooks = self.config_manager.get_lorebooks()
+        for lb in lorebooks:
+            name = lb.get("name", "Unknown")
+            active = "✓" if lb.get("active", False) else "✗"
+            entry_count = len(lb.get("entries", []))
+            self.lorebooks_listbox.insert(tk.END, f"{active} {name} ({entry_count} entries)")
+    
+    def on_lorebook_select(self, event):
+        """Handle lorebook selection"""
+        selection = self.lorebooks_listbox.curselection()
+        if selection:
+            index = selection[0]
+            lorebooks = self.config_manager.get_lorebooks()
+            if index < len(lorebooks):
+                self.current_lorebook = lorebooks[index]['name']
+                self.selected_lorebook_label.config(text=f"Selected: {self.current_lorebook}")
+                self.refresh_entries_list()
+    
+    def add_entry(self):
+        """Add a new entry to the selected lorebook"""
+        if not self.current_lorebook:
+            messagebox.showwarning("Warning", "Please select a lorebook first")
+            return
+        
+        content = self.entry_content_text.get("1.0", tk.END).strip()
+        if not content:
+            messagebox.showwarning("Warning", "Please enter entry content")
+            return
+        
+        activation_type = self.entry_activation_type.get()
+        keywords = []
+        
+        if activation_type == "normal":
+            keywords_str = self.entry_keywords_entry.get().strip()
+            if not keywords_str:
+                messagebox.showwarning("Warning", "Please enter at least one keyword for normal entries")
+                return
+            keywords = [k.strip() for k in keywords_str.split(",") if k.strip()]
+        
+        success = self.config_manager.add_lorebook_entry(
+            self.current_lorebook, content, activation_type, keywords
+        )
+        
+        if success:
+            self.clear_entry_form()
+            self.refresh_entries_list()
+            self.refresh_lorebooks_list()  # Update entry count
+            messagebox.showinfo("Success", "Entry added successfully!")
+        else:
+            messagebox.showerror("Error", "Failed to add entry")
+    
+    def update_entry(self):
+        """Update the selected entry"""
+        if not self.current_lorebook:
+            messagebox.showwarning("Warning", "Please select a lorebook first")
+            return
+        
+        if self.current_entry_index is None:
+            messagebox.showwarning("Warning", "Please select an entry to update")
+            return
+        
+        content = self.entry_content_text.get("1.0", tk.END).strip()
+        if not content:
+            messagebox.showwarning("Warning", "Please enter entry content")
+            return
+        
+        activation_type = self.entry_activation_type.get()
+        keywords = []
+        
+        if activation_type == "normal":
+            keywords_str = self.entry_keywords_entry.get().strip()
+            if not keywords_str:
+                messagebox.showwarning("Warning", "Please enter at least one keyword for normal entries")
+                return
+            keywords = [k.strip() for k in keywords_str.split(",") if k.strip()]
+        
+        success = self.config_manager.update_lorebook_entry(
+            self.current_lorebook, self.current_entry_index, content, activation_type, keywords
+        )
+        
+        if success:
+            self.clear_entry_form()
+            self.refresh_entries_list()
+            messagebox.showinfo("Success", "Entry updated successfully!")
+        else:
+            messagebox.showerror("Error", "Failed to update entry")
+    
+    def delete_entry(self):
+        """Delete the selected entry"""
+        if not self.current_lorebook:
+            messagebox.showwarning("Warning", "Please select a lorebook first")
+            return
+        
+        selection = self.entries_listbox.curselection()
+        if not selection:
+            messagebox.showwarning("Warning", "Please select an entry to delete")
+            return
+        
+        index = selection[0]
+        if messagebox.askyesno("Confirm Delete", "Are you sure you want to delete this entry?"):
+            success = self.config_manager.delete_lorebook_entry(self.current_lorebook, index)
+            if success:
+                self.clear_entry_form()
+                self.refresh_entries_list()
+                self.refresh_lorebooks_list()  # Update entry count
+                messagebox.showinfo("Success", "Entry deleted successfully!")
+            else:
+                messagebox.showerror("Error", "Failed to delete entry")
+    
+    def edit_entry(self):
+        """Load selected entry into the form for editing"""
+        if not self.current_lorebook:
+            messagebox.showwarning("Warning", "Please select a lorebook first")
+            return
+        
+        selection = self.entries_listbox.curselection()
+        if not selection:
+            messagebox.showwarning("Warning", "Please select an entry to edit")
+            return
+        
+        index = selection[0]
+        lorebook = self.config_manager.get_lorebook_by_name(self.current_lorebook)
+        if lorebook and index < len(lorebook.get("entries", [])):
+            entry = lorebook["entries"][index]
+            
+            # Load entry data into form
+            self.entry_content_text.delete("1.0", tk.END)
+            self.entry_content_text.insert("1.0", entry.get("content", ""))
+            
+            activation_type = entry.get("insertion_type", "normal")
+            self.entry_activation_type.set(activation_type)
+            self.on_activation_type_change()
+            
+            keywords = entry.get("keywords", [])
+            self.entry_keywords_entry.delete(0, tk.END)
+            if keywords:
+                self.entry_keywords_entry.insert(0, ", ".join(keywords))
+            
+            self.current_entry_index = index
+    
+    def clear_entry_form(self):
+        """Clear the entry form"""
+        self.entry_content_text.delete("1.0", tk.END)
+        self.entry_activation_type.set("normal")
+        self.entry_keywords_entry.delete(0, tk.END)
+        self.current_entry_index = None
+        self.on_activation_type_change()
+    
+    def refresh_entries_list(self):
+        """Refresh the entries list for the selected lorebook"""
+        self.entries_listbox.delete(0, tk.END)
+        
+        if not self.current_lorebook:
+            self.selected_lorebook_label.config(text="No lorebook selected")
+            return
+        
+        lorebook = self.config_manager.get_lorebook_by_name(self.current_lorebook)
+        if lorebook:
+            entries = lorebook.get("entries", [])
+            for i, entry in enumerate(entries):
+                content = entry.get("content", "")
+                content_preview = content[:50] + "..." if len(content) > 50 else content
+                activation_type = entry.get("insertion_type", "normal")
+                type_label = "C" if activation_type == "constant" else "N"
+                
+                keywords = entry.get("keywords", [])
+                keywords_preview = ""
+                if activation_type == "normal" and keywords:
+                    keywords_preview = f" [{', '.join(keywords[:3])}{'...' if len(keywords) > 3 else ''}]"
+                
+                self.entries_listbox.insert(tk.END, f"[{type_label}] {content_preview}{keywords_preview}")
+    
+    def on_entry_select(self, event):
+        """Handle entry selection"""
+        # This is just for visual feedback; actual editing happens via Edit button
+        pass
+    
+    def create_console_tab(self):
+        """Create console tab for viewing AI request/response logs"""
+        
+        # Console frame
+        console_frame = ttk.LabelFrame(self.console_frame, text="AI Request/Response Console", padding=10)
+        console_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        # Console text area with scrollbar
+        console_scroll = ttk.Scrollbar(console_frame)
+        console_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        self.console_text = scrolledtext.ScrolledText(
+            console_frame,
+            height=25,
+            width=80,
+            state='disabled',
+            yscrollcommand=console_scroll.set,
+            wrap=tk.WORD
+        )
+        self.console_text.pack(fill=tk.BOTH, expand=True, side=tk.LEFT)
+        console_scroll.config(command=self.console_text.yview)
+        
+        # Configure text tags for different log types
+        self.console_text.tag_config('header', foreground='blue', font=('TkDefaultFont', 10, 'bold'))
+        self.console_text.tag_config('request', foreground='green')
+        self.console_text.tag_config('response', foreground='purple')
+        self.console_text.tag_config('error', foreground='red')
+        self.console_text.tag_config('info', foreground='gray')
+        self.console_text.tag_config('timestamp', foreground='navy', font=('TkDefaultFont', 8))
+        
+        # Control buttons
+        button_frame = ttk.Frame(console_frame)
+        button_frame.pack(fill=tk.X, pady=5)
+        
+        self.auto_scroll_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(button_frame, text="Auto-scroll", variable=self.auto_scroll_var).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Clear Console", command=self.clear_console).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Export Log", command=self.export_console_log).pack(side=tk.LEFT, padx=5)
+        
+        # Initialize console with welcome message
+        self.log_to_console("Console initialized. AI requests and responses will appear here.", 'info')
+    
+    def log_to_console(self, message, tag='info'):
+        """Log a message to the console"""
+        import datetime
+        
+        self.console_text.config(state='normal')
+        
+        # Add timestamp
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.console_text.insert(tk.END, f"[{timestamp}] ", 'timestamp')
+        
+        # Add message
+        self.console_text.insert(tk.END, f"{message}\n", tag)
+        
+        # Auto-scroll if enabled
+        if self.auto_scroll_var.get():
+            self.console_text.see(tk.END)
+        
+        self.console_text.config(state='disabled')
+    
+    def clear_console(self):
+        """Clear the console"""
+        self.console_text.config(state='normal')
+        self.console_text.delete("1.0", tk.END)
+        self.console_text.config(state='disabled')
+        self.log_to_console("Console cleared.", 'info')
+    
+    def export_console_log(self):
+        """Export console log to a file"""
+        filename = filedialog.asksaveasfilename(
+            title="Export Console Log",
+            defaultextension=".txt",
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")]
+        )
+        
+        if filename:
+            try:
+                with open(filename, 'w') as f:
+                    f.write(self.console_text.get("1.0", tk.END))
+                messagebox.showinfo("Success", f"Console log exported to {filename}")
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to export log: {str(e)}")
 
 
 def main():
