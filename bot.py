@@ -1203,6 +1203,7 @@ class PresetBot(commands.Bot):
     async def send_via_webhook(self, channel, content: str, character: Dict[str, Any]) -> None:
         """
         Send a message via webhook with character identity
+        Handles long messages by splitting into chunks, with avatar sent first
         
         Args:
             channel: Discord channel to send to
@@ -1237,20 +1238,50 @@ class PresetBot(commands.Bot):
             except Exception:
                 pass
         
-        # Send via webhook
-        if avatar_url:
-            # Use avatar_url for webhook avatar (preferred method)
-            if avatar_image:
-                # Both URL and local file - use URL for avatar, attach file
-                await webhook.send(content=content, username=display_name, avatar_url=avatar_url, file=avatar_image)
+        # Discord message limit is 2000 characters
+        # If content is short enough, send in one message
+        if len(content) <= 2000:
+            if avatar_url:
+                # Use avatar_url for webhook avatar (preferred method)
+                if avatar_image:
+                    # Both URL and local file - use URL for avatar, attach file
+                    await webhook.send(content=content, username=display_name, avatar_url=avatar_url, file=avatar_image)
+                else:
+                    await webhook.send(content=content, username=display_name, avatar_url=avatar_url)
+            elif avatar_image:
+                # Only local file - attach it to the message
+                await webhook.send(content=content, username=display_name, file=avatar_image)
             else:
-                await webhook.send(content=content, username=display_name, avatar_url=avatar_url)
-        elif avatar_image:
-            # Only local file - attach it to the message
-            await webhook.send(content=content, username=display_name, file=avatar_image)
+                # No avatar
+                await webhook.send(content=content, username=display_name)
         else:
-            # No avatar
-            await webhook.send(content=content, username=display_name)
+            # Content is too long - need to split
+            # Split into chunks of ~1900 characters to leave room for safety
+            chunk_size = 1900
+            chunks = [content[i:i+chunk_size] for i in range(0, len(content), chunk_size)]
+            
+            # Send first message with avatar image (if local file) or just first chunk
+            if avatar_image:
+                # Send avatar image first with first chunk of text
+                if avatar_url:
+                    # Both URL and local file - use URL for avatar, attach file with first chunk
+                    await webhook.send(content=chunks[0], username=display_name, avatar_url=avatar_url, file=avatar_image)
+                else:
+                    # Only local file - attach to first message
+                    await webhook.send(content=chunks[0], username=display_name, file=avatar_image)
+            else:
+                # No avatar file, just send first chunk with avatar_url if available
+                if avatar_url:
+                    await webhook.send(content=chunks[0], username=display_name, avatar_url=avatar_url)
+                else:
+                    await webhook.send(content=chunks[0], username=display_name)
+            
+            # Send remaining chunks
+            for chunk in chunks[1:]:
+                if avatar_url:
+                    await webhook.send(content=chunk, username=display_name, avatar_url=avatar_url)
+                else:
+                    await webhook.send(content=chunk, username=display_name)
     
     async def on_ready(self):
         """Called when bot is ready"""

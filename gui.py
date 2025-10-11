@@ -344,6 +344,11 @@ class PresetBotGUI:
         self.char_avatar_file_entry.grid(row=2, column=1, pady=5, padx=5, sticky=tk.W)
         ttk.Button(avatar_frame, text="Browse...", command=self.browse_avatar_file).grid(row=2, column=2, pady=5, padx=5)
         
+        # Upload to catbox option
+        self.char_upload_to_catbox_var = tk.BooleanVar(value=False)
+        self.char_upload_to_catbox_cb = ttk.Checkbutton(avatar_frame, text="Upload to catbox.moe (for avatar URL)", variable=self.char_upload_to_catbox_var)
+        self.char_upload_to_catbox_cb.grid(row=3, column=1, sticky=tk.W, pady=5, padx=5)
+        
         # Avatar Preview section
         preview_frame = ttk.LabelFrame(add_frame, text="Avatar Preview", padding=5)
         preview_frame.grid(row=0, column=3, rowspan=7, sticky=tk.N, padx=10, pady=5)
@@ -771,6 +776,7 @@ class PresetBotGUI:
     async def send_via_webhook(self, channel, content: str, character: dict) -> None:
         """
         Send a message via webhook with character identity
+        Handles long messages by splitting into chunks, with avatar sent first
         
         Args:
             channel: Discord channel to send to
@@ -805,20 +811,52 @@ class PresetBotGUI:
             except Exception as e:
                 self.log_to_console(f"Failed to load avatar file: {str(e)}", 'error')
         
-        # Send via webhook
-        if avatar_url:
-            # Use avatar_url for webhook avatar (preferred method)
-            if avatar_image:
-                # Both URL and local file - use URL for avatar, attach file
-                await webhook.send(content=content, username=display_name, avatar_url=avatar_url, file=avatar_image)
+        # Discord message limit is 2000 characters
+        # If content is short enough, send in one message
+        if len(content) <= 2000:
+            if avatar_url:
+                # Use avatar_url for webhook avatar (preferred method)
+                if avatar_image:
+                    # Both URL and local file - use URL for avatar, attach file
+                    await webhook.send(content=content, username=display_name, avatar_url=avatar_url, file=avatar_image)
+                else:
+                    await webhook.send(content=content, username=display_name, avatar_url=avatar_url)
+            elif avatar_image:
+                # Only local file - attach it to the message
+                await webhook.send(content=content, username=display_name, file=avatar_image)
             else:
-                await webhook.send(content=content, username=display_name, avatar_url=avatar_url)
-        elif avatar_image:
-            # Only local file - attach it to the message
-            await webhook.send(content=content, username=display_name, file=avatar_image)
+                # No avatar
+                await webhook.send(content=content, username=display_name)
         else:
-            # No avatar
-            await webhook.send(content=content, username=display_name)
+            # Content is too long - need to split
+            # Split into chunks of ~1900 characters to leave room for safety
+            chunk_size = 1900
+            chunks = [content[i:i+chunk_size] for i in range(0, len(content), chunk_size)]
+            
+            # Send first message with avatar image (if local file) or just first chunk
+            if avatar_image:
+                # Send avatar image first with first chunk of text
+                if avatar_url:
+                    # Both URL and local file - use URL for avatar, attach file with first chunk
+                    await webhook.send(content=chunks[0], username=display_name, avatar_url=avatar_url, file=avatar_image)
+                else:
+                    # Only local file - attach to first message
+                    await webhook.send(content=chunks[0], username=display_name, file=avatar_image)
+            else:
+                # No avatar file, just send first chunk with avatar_url if available
+                if avatar_url:
+                    await webhook.send(content=chunks[0], username=display_name, avatar_url=avatar_url)
+                else:
+                    await webhook.send(content=chunks[0], username=display_name)
+            
+            # Send remaining chunks
+            for chunk in chunks[1:]:
+                if avatar_url:
+                    await webhook.send(content=chunk, username=display_name, avatar_url=avatar_url)
+                else:
+                    await webhook.send(content=chunk, username=display_name)
+            
+            self.log_to_console(f"Message split into {len(chunks)} chunks due to length", 'info')
     
     def clear_message(self):
         """Clear message text"""
@@ -863,23 +901,32 @@ class PresetBotGUI:
             # Handle avatar file if provided
             avatar_file_dest = ""
             if avatar_file_source and os.path.exists(avatar_file_source):
-                # Upload to catbox.moe
-                messagebox.showinfo("Uploading", "Uploading avatar to catbox.moe...")
-                uploaded_url = self.upload_to_catbox(avatar_file_source)
-                
-                if uploaded_url:
-                    # Use the uploaded URL as avatar_url
-                    avatar_url = uploaded_url
-                    messagebox.showinfo("Success", f"Avatar uploaded successfully!\nURL: {uploaded_url}")
+                # Check if user wants to upload to catbox.moe
+                if self.char_upload_to_catbox_var.get():
+                    # Upload to catbox.moe
+                    messagebox.showinfo("Uploading", "Uploading avatar to catbox.moe...")
+                    uploaded_url = self.upload_to_catbox(avatar_file_source)
                     
-                    # Still copy locally as backup
+                    if uploaded_url:
+                        # Use the uploaded URL as avatar_url
+                        avatar_url = uploaded_url
+                        messagebox.showinfo("Success", f"Avatar uploaded successfully!\nURL: {uploaded_url}")
+                        
+                        # Still copy locally as backup
+                        avatars_dir = "character_avatars"
+                        os.makedirs(avatars_dir, exist_ok=True)
+                        file_ext = os.path.splitext(avatar_file_source)[1]
+                        avatar_file_dest = os.path.join(avatars_dir, f"{name}{file_ext}")
+                        shutil.copy2(avatar_file_source, avatar_file_dest)
+                    else:
+                        messagebox.showwarning("Upload Failed", "Failed to upload avatar to catbox.moe. The character will be created without an avatar URL.")
+                else:
+                    # Just copy locally without uploading
                     avatars_dir = "character_avatars"
                     os.makedirs(avatars_dir, exist_ok=True)
                     file_ext = os.path.splitext(avatar_file_source)[1]
                     avatar_file_dest = os.path.join(avatars_dir, f"{name}{file_ext}")
                     shutil.copy2(avatar_file_source, avatar_file_dest)
-                else:
-                    messagebox.showwarning("Upload Failed", "Failed to upload avatar to catbox.moe. The character will be created without an avatar URL.")
             
             # Add character to config
             self.config_manager.add_character(name, display_name, description, avatar_url, avatar_file_dest, scenario)
@@ -933,27 +980,46 @@ class PresetBotGUI:
             current_avatar_url = characters[self.char_editing_index].get("avatar_url", "")
             avatar_file_dest = current_avatar_file
             
-            if avatar_file_source and os.path.exists(avatar_file_source) and avatar_file_source != current_avatar_file:
-                # Upload to catbox.moe
-                messagebox.showinfo("Uploading", "Uploading avatar to catbox.moe...")
-                uploaded_url = self.upload_to_catbox(avatar_file_source)
-                
-                if uploaded_url:
-                    # Use the uploaded URL as avatar_url
-                    avatar_url = uploaded_url
-                    messagebox.showinfo("Success", f"Avatar uploaded successfully!\nURL: {uploaded_url}")
+            # Check if a new file was selected (different from stored path, not comparing actual files)
+            if avatar_file_source and os.path.exists(avatar_file_source):
+                # Check if user wants to upload to catbox.moe
+                if self.char_upload_to_catbox_var.get():
+                    # Only upload if it's a different file or if there's no current avatar URL
+                    should_upload = (avatar_file_source != current_avatar_file) or not current_avatar_url
                     
-                    # Still copy locally as backup
-                    avatars_dir = "character_avatars"
-                    os.makedirs(avatars_dir, exist_ok=True)
-                    file_ext = os.path.splitext(avatar_file_source)[1]
-                    avatar_file_dest = os.path.join(avatars_dir, f"{name}{file_ext}")
-                    shutil.copy2(avatar_file_source, avatar_file_dest)
+                    if should_upload:
+                        # Upload to catbox.moe
+                        messagebox.showinfo("Uploading", "Uploading avatar to catbox.moe...")
+                        uploaded_url = self.upload_to_catbox(avatar_file_source)
+                        
+                        if uploaded_url:
+                            # Use the uploaded URL as avatar_url
+                            avatar_url = uploaded_url
+                            messagebox.showinfo("Success", f"Avatar uploaded successfully!\nURL: {uploaded_url}")
+                            
+                            # Still copy locally as backup
+                            avatars_dir = "character_avatars"
+                            os.makedirs(avatars_dir, exist_ok=True)
+                            file_ext = os.path.splitext(avatar_file_source)[1]
+                            avatar_file_dest = os.path.join(avatars_dir, f"{name}{file_ext}")
+                            shutil.copy2(avatar_file_source, avatar_file_dest)
+                        else:
+                            messagebox.showwarning("Upload Failed", "Failed to upload avatar to catbox.moe. Keeping existing avatar URL.")
+                            # Keep existing URL if upload fails
+                            if not avatar_url:
+                                avatar_url = current_avatar_url
+                    else:
+                        # File hasn't changed and we already have a URL, keep existing values
+                        if not avatar_url:
+                            avatar_url = current_avatar_url
                 else:
-                    messagebox.showwarning("Upload Failed", "Failed to upload avatar to catbox.moe. Keeping existing avatar URL.")
-                    # Keep existing URL if upload fails
-                    if not avatar_url:
-                        avatar_url = current_avatar_url
+                    # Just copy locally without uploading
+                    if avatar_file_source != current_avatar_file:
+                        avatars_dir = "character_avatars"
+                        os.makedirs(avatars_dir, exist_ok=True)
+                        file_ext = os.path.splitext(avatar_file_source)[1]
+                        avatar_file_dest = os.path.join(avatars_dir, f"{name}{file_ext}")
+                        shutil.copy2(avatar_file_source, avatar_file_dest)
             
             # Update character in config
             self.config_manager.update_character(self.char_editing_index, name, display_name, description, avatar_url, avatar_file_dest, scenario)
@@ -1011,6 +1077,7 @@ class PresetBotGUI:
         self.char_scenario_text.delete("1.0", tk.END)
         self.char_avatar_url_entry.delete(0, tk.END)
         self.char_avatar_file_var.set("")
+        self.char_upload_to_catbox_var.set(False)
         self.char_editing_index = None
     
     def delete_character(self):
@@ -1399,6 +1466,11 @@ class PresetBotGUI:
         self.user_char_avatar_file_entry.grid(row=2, column=1, pady=5, padx=5, sticky=tk.W)
         ttk.Button(avatar_frame, text="Browse...", command=self.browse_user_char_avatar_file).grid(row=2, column=2, pady=5, padx=5)
         
+        # Upload to catbox option
+        self.user_char_upload_to_catbox_var = tk.BooleanVar(value=False)
+        self.user_char_upload_to_catbox_cb = ttk.Checkbutton(avatar_frame, text="Upload to catbox.moe (for avatar URL)", variable=self.user_char_upload_to_catbox_var)
+        self.user_char_upload_to_catbox_cb.grid(row=3, column=1, sticky=tk.W, pady=5, padx=5)
+        
         # Avatar Preview section
         preview_frame = ttk.LabelFrame(add_frame, text="Avatar Preview", padding=5)
         preview_frame.grid(row=0, column=3, rowspan=5, sticky=tk.N, padx=10, pady=5)
@@ -1556,23 +1628,32 @@ class PresetBotGUI:
             # Handle avatar file if provided
             avatar_file_dest = ""
             if avatar_file_source and os.path.exists(avatar_file_source):
-                # Upload to catbox.moe
-                messagebox.showinfo("Uploading", "Uploading avatar to catbox.moe...")
-                uploaded_url = self.upload_to_catbox(avatar_file_source)
-                
-                if uploaded_url:
-                    # Use the uploaded URL as avatar_url
-                    avatar_url = uploaded_url
-                    messagebox.showinfo("Success", f"Avatar uploaded successfully!\nURL: {uploaded_url}")
+                # Check if user wants to upload to catbox.moe
+                if self.user_char_upload_to_catbox_var.get():
+                    # Upload to catbox.moe
+                    messagebox.showinfo("Uploading", "Uploading avatar to catbox.moe...")
+                    uploaded_url = self.upload_to_catbox(avatar_file_source)
                     
-                    # Still copy locally as backup
+                    if uploaded_url:
+                        # Use the uploaded URL as avatar_url
+                        avatar_url = uploaded_url
+                        messagebox.showinfo("Success", f"Avatar uploaded successfully!\nURL: {uploaded_url}")
+                        
+                        # Still copy locally as backup
+                        avatars_dir = "character_avatars"
+                        os.makedirs(avatars_dir, exist_ok=True)
+                        file_ext = os.path.splitext(avatar_file_source)[1]
+                        avatar_file_dest = os.path.join(avatars_dir, f"user_{name}{file_ext}")
+                        shutil.copy2(avatar_file_source, avatar_file_dest)
+                    else:
+                        messagebox.showwarning("Upload Failed", "Failed to upload avatar to catbox.moe. The character will be created without an avatar URL.")
+                else:
+                    # Just copy locally without uploading
                     avatars_dir = "character_avatars"
                     os.makedirs(avatars_dir, exist_ok=True)
                     file_ext = os.path.splitext(avatar_file_source)[1]
                     avatar_file_dest = os.path.join(avatars_dir, f"user_{name}{file_ext}")
                     shutil.copy2(avatar_file_source, avatar_file_dest)
-                else:
-                    messagebox.showwarning("Upload Failed", "Failed to upload avatar to catbox.moe. The character will be created without an avatar URL.")
             
             # Add character to config
             self.config_manager.add_user_character(name, display_name, description, avatar_url, avatar_file_dest)
@@ -1624,27 +1705,46 @@ class PresetBotGUI:
             current_avatar_url = characters[self.user_char_editing_index].get("avatar_url", "")
             avatar_file_dest = current_avatar_file
             
-            if avatar_file_source and os.path.exists(avatar_file_source) and avatar_file_source != current_avatar_file:
-                # Upload to catbox.moe
-                messagebox.showinfo("Uploading", "Uploading avatar to catbox.moe...")
-                uploaded_url = self.upload_to_catbox(avatar_file_source)
-                
-                if uploaded_url:
-                    # Use the uploaded URL as avatar_url
-                    avatar_url = uploaded_url
-                    messagebox.showinfo("Success", f"Avatar uploaded successfully!\nURL: {uploaded_url}")
+            # Check if a new file was selected (different from stored path, not comparing actual files)
+            if avatar_file_source and os.path.exists(avatar_file_source):
+                # Check if user wants to upload to catbox.moe
+                if self.user_char_upload_to_catbox_var.get():
+                    # Only upload if it's a different file or if there's no current avatar URL
+                    should_upload = (avatar_file_source != current_avatar_file) or not current_avatar_url
                     
-                    # Still copy locally as backup
-                    avatars_dir = "character_avatars"
-                    os.makedirs(avatars_dir, exist_ok=True)
-                    file_ext = os.path.splitext(avatar_file_source)[1]
-                    avatar_file_dest = os.path.join(avatars_dir, f"user_{name}{file_ext}")
-                    shutil.copy2(avatar_file_source, avatar_file_dest)
+                    if should_upload:
+                        # Upload to catbox.moe
+                        messagebox.showinfo("Uploading", "Uploading avatar to catbox.moe...")
+                        uploaded_url = self.upload_to_catbox(avatar_file_source)
+                        
+                        if uploaded_url:
+                            # Use the uploaded URL as avatar_url
+                            avatar_url = uploaded_url
+                            messagebox.showinfo("Success", f"Avatar uploaded successfully!\nURL: {uploaded_url}")
+                            
+                            # Still copy locally as backup
+                            avatars_dir = "character_avatars"
+                            os.makedirs(avatars_dir, exist_ok=True)
+                            file_ext = os.path.splitext(avatar_file_source)[1]
+                            avatar_file_dest = os.path.join(avatars_dir, f"user_{name}{file_ext}")
+                            shutil.copy2(avatar_file_source, avatar_file_dest)
+                        else:
+                            messagebox.showwarning("Upload Failed", "Failed to upload avatar to catbox.moe. Keeping existing avatar URL.")
+                            # Keep existing URL if upload fails
+                            if not avatar_url:
+                                avatar_url = current_avatar_url
+                    else:
+                        # File hasn't changed and we already have a URL, keep existing values
+                        if not avatar_url:
+                            avatar_url = current_avatar_url
                 else:
-                    messagebox.showwarning("Upload Failed", "Failed to upload avatar to catbox.moe. Keeping existing avatar URL.")
-                    # Keep existing URL if upload fails
-                    if not avatar_url:
-                        avatar_url = current_avatar_url
+                    # Just copy locally without uploading
+                    if avatar_file_source != current_avatar_file:
+                        avatars_dir = "character_avatars"
+                        os.makedirs(avatars_dir, exist_ok=True)
+                        file_ext = os.path.splitext(avatar_file_source)[1]
+                        avatar_file_dest = os.path.join(avatars_dir, f"user_{name}{file_ext}")
+                        shutil.copy2(avatar_file_source, avatar_file_dest)
             
             # Update character in config
             self.config_manager.update_user_character(self.user_char_editing_index, name, display_name, description, avatar_url, avatar_file_dest)
@@ -1697,6 +1797,7 @@ class PresetBotGUI:
         self.user_char_description_text.delete("1.0", tk.END)
         self.user_char_avatar_url_entry.delete(0, tk.END)
         self.user_char_avatar_file_var.set("")
+        self.user_char_upload_to_catbox_var.set(False)
         self.user_char_editing_index = None
     
     def delete_user_character(self):
