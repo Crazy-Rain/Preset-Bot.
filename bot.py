@@ -815,19 +815,31 @@ class PresetBot(commands.Bot):
             # Parse the message to extract dialogue and actions
             # Format: !chat CharacterName: "What is being said" What is being Done
             
-            # Get user character if specified
+            # Get user character if specified, or use the last user character from this channel
             user_char = None
             user_char_info = ""
-            if user_character:
-                user_char = self.config_manager.get_user_character_by_name(user_character)
-                if user_char:
-                    # Build persona information from user character
-                    user_char_info = f"\n\nUser is playing as {user_char.get('display_name', user_character)}."
-                    if user_char.get('description'):
-                        user_char_info += f"\nCharacter description: {user_char.get('description')}"
+            active_user_character = user_character
             
             # Build the chat message
             channel_id = str(ctx.channel.id)
+            
+            # If no user character specified, check if one was used recently in this channel
+            if not active_user_character:
+                chat_history = self.config_manager.get_chat_history(channel_id)
+                # Look through recent history (last 20 messages) for a user character
+                for msg in reversed(chat_history[-20:]):
+                    if msg.get("user_character") and msg.get("author") == str(ctx.author.id):
+                        active_user_character = msg.get("user_character")
+                        break
+            
+            # Get user character info if we have an active character
+            if active_user_character:
+                user_char = self.config_manager.get_user_character_by_name(active_user_character)
+                if user_char:
+                    # Build persona information from user character
+                    user_char_info = f"\n\nUser is playing as {user_char.get('display_name', active_user_character)}."
+                    if user_char.get('description'):
+                        user_char_info += f"\nCharacter description: {user_char.get('description')}"
             
             # Get channel chat history
             chat_history = self.config_manager.get_chat_history(channel_id)
@@ -836,7 +848,7 @@ class PresetBot(commands.Bot):
             message_data = {
                 "author": str(ctx.author.id),
                 "author_name": str(ctx.author.name),
-                "user_character": user_character,
+                "user_character": active_user_character,  # Store the active character (may be inherited)
                 "content": message,
                 "type": "user",
                 "timestamp": ctx.message.created_at.isoformat()
