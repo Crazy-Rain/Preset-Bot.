@@ -14,5 +14,9 @@
       "avatar_url": "",
       "avatar_file": ""
     }
-  ]
+  ],
+  "user_characters": [],
+  "presets": [],
+  "active_preset": null,
+  "chat_history": {}
 }
