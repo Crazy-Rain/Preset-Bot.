@@ -9,6 +9,7 @@ import os
 import asyncio
 import threading
 import shutil
+import requests
 from typing import Optional
 from bot import ConfigManager, AIResponseHandler
 import discord
@@ -28,6 +29,43 @@ class PresetBotGUI:
         
         self.create_widgets()
         self.load_current_config()
+    
+    def upload_to_catbox(self, file_path: str) -> Optional[str]:
+        """
+        Upload an image file to catbox.moe and return the URL
+        
+        Args:
+            file_path: Path to the image file to upload
+            
+        Returns:
+            URL of the uploaded image, or None if upload failed
+        """
+        try:
+            with open(file_path, 'rb') as f:
+                files = {'fileToUpload': f}
+                data = {'reqtype': 'fileupload'}
+                
+                response = requests.post(
+                    'https://catbox.moe/user/api.php',
+                    files=files,
+                    data=data,
+                    timeout=30
+                )
+                
+                if response.status_code == 200:
+                    url = response.text.strip()
+                    if url.startswith('http'):
+                        return url
+                    else:
+                        print(f"Catbox upload returned unexpected response: {url}")
+                        return None
+                else:
+                    print(f"Catbox upload failed with status {response.status_code}")
+                    return None
+                    
+        except Exception as e:
+            print(f"Error uploading to catbox: {str(e)}")
+            return None
     
     def create_widgets(self):
         """Create all GUI widgets"""
@@ -594,14 +632,23 @@ class PresetBotGUI:
             # Handle avatar file if provided
             avatar_file_dest = ""
             if avatar_file_source and os.path.exists(avatar_file_source):
-                # Create avatars directory if it doesn't exist
-                avatars_dir = "character_avatars"
-                os.makedirs(avatars_dir, exist_ok=True)
+                # Upload to catbox.moe
+                messagebox.showinfo("Uploading", "Uploading avatar to catbox.moe...")
+                uploaded_url = self.upload_to_catbox(avatar_file_source)
                 
-                # Copy file to avatars directory with character name
-                file_ext = os.path.splitext(avatar_file_source)[1]
-                avatar_file_dest = os.path.join(avatars_dir, f"{name}{file_ext}")
-                shutil.copy2(avatar_file_source, avatar_file_dest)
+                if uploaded_url:
+                    # Use the uploaded URL as avatar_url
+                    avatar_url = uploaded_url
+                    messagebox.showinfo("Success", f"Avatar uploaded successfully!\nURL: {uploaded_url}")
+                    
+                    # Still copy locally as backup
+                    avatars_dir = "character_avatars"
+                    os.makedirs(avatars_dir, exist_ok=True)
+                    file_ext = os.path.splitext(avatar_file_source)[1]
+                    avatar_file_dest = os.path.join(avatars_dir, f"{name}{file_ext}")
+                    shutil.copy2(avatar_file_source, avatar_file_dest)
+                else:
+                    messagebox.showwarning("Upload Failed", "Failed to upload avatar to catbox.moe. The character will be created without an avatar URL.")
             
             # Add character to config
             self.config_manager.add_character(name, display_name, description, avatar_url, avatar_file_dest, scenario)
@@ -636,17 +683,30 @@ class PresetBotGUI:
             # Handle avatar file if provided
             characters = self.config_manager.get_characters()
             current_avatar_file = characters[self.char_editing_index].get("avatar_file", "")
+            current_avatar_url = characters[self.char_editing_index].get("avatar_url", "")
             avatar_file_dest = current_avatar_file
             
             if avatar_file_source and os.path.exists(avatar_file_source) and avatar_file_source != current_avatar_file:
-                # Create avatars directory if it doesn't exist
-                avatars_dir = "character_avatars"
-                os.makedirs(avatars_dir, exist_ok=True)
+                # Upload to catbox.moe
+                messagebox.showinfo("Uploading", "Uploading avatar to catbox.moe...")
+                uploaded_url = self.upload_to_catbox(avatar_file_source)
                 
-                # Copy file to avatars directory with character name
-                file_ext = os.path.splitext(avatar_file_source)[1]
-                avatar_file_dest = os.path.join(avatars_dir, f"{name}{file_ext}")
-                shutil.copy2(avatar_file_source, avatar_file_dest)
+                if uploaded_url:
+                    # Use the uploaded URL as avatar_url
+                    avatar_url = uploaded_url
+                    messagebox.showinfo("Success", f"Avatar uploaded successfully!\nURL: {uploaded_url}")
+                    
+                    # Still copy locally as backup
+                    avatars_dir = "character_avatars"
+                    os.makedirs(avatars_dir, exist_ok=True)
+                    file_ext = os.path.splitext(avatar_file_source)[1]
+                    avatar_file_dest = os.path.join(avatars_dir, f"{name}{file_ext}")
+                    shutil.copy2(avatar_file_source, avatar_file_dest)
+                else:
+                    messagebox.showwarning("Upload Failed", "Failed to upload avatar to catbox.moe. Keeping existing avatar URL.")
+                    # Keep existing URL if upload fails
+                    if not avatar_url:
+                        avatar_url = current_avatar_url
             
             # Update character in config
             self.config_manager.update_character(self.char_editing_index, name, display_name, description, avatar_url, avatar_file_dest, scenario)
@@ -1151,14 +1211,23 @@ class PresetBotGUI:
             # Handle avatar file if provided
             avatar_file_dest = ""
             if avatar_file_source and os.path.exists(avatar_file_source):
-                # Create avatars directory if it doesn't exist
-                avatars_dir = "character_avatars"
-                os.makedirs(avatars_dir, exist_ok=True)
+                # Upload to catbox.moe
+                messagebox.showinfo("Uploading", "Uploading avatar to catbox.moe...")
+                uploaded_url = self.upload_to_catbox(avatar_file_source)
                 
-                # Copy file to avatars directory with character name
-                file_ext = os.path.splitext(avatar_file_source)[1]
-                avatar_file_dest = os.path.join(avatars_dir, f"user_{name}{file_ext}")
-                shutil.copy2(avatar_file_source, avatar_file_dest)
+                if uploaded_url:
+                    # Use the uploaded URL as avatar_url
+                    avatar_url = uploaded_url
+                    messagebox.showinfo("Success", f"Avatar uploaded successfully!\nURL: {uploaded_url}")
+                    
+                    # Still copy locally as backup
+                    avatars_dir = "character_avatars"
+                    os.makedirs(avatars_dir, exist_ok=True)
+                    file_ext = os.path.splitext(avatar_file_source)[1]
+                    avatar_file_dest = os.path.join(avatars_dir, f"user_{name}{file_ext}")
+                    shutil.copy2(avatar_file_source, avatar_file_dest)
+                else:
+                    messagebox.showwarning("Upload Failed", "Failed to upload avatar to catbox.moe. The character will be created without an avatar URL.")
             
             # Add character to config
             self.config_manager.add_user_character(name, display_name, description, avatar_url, avatar_file_dest)
@@ -1191,17 +1260,30 @@ class PresetBotGUI:
             # Handle avatar file if provided
             characters = self.config_manager.get_user_characters()
             current_avatar_file = characters[self.user_char_editing_index].get("avatar_file", "")
+            current_avatar_url = characters[self.user_char_editing_index].get("avatar_url", "")
             avatar_file_dest = current_avatar_file
             
             if avatar_file_source and os.path.exists(avatar_file_source) and avatar_file_source != current_avatar_file:
-                # Create avatars directory if it doesn't exist
-                avatars_dir = "character_avatars"
-                os.makedirs(avatars_dir, exist_ok=True)
+                # Upload to catbox.moe
+                messagebox.showinfo("Uploading", "Uploading avatar to catbox.moe...")
+                uploaded_url = self.upload_to_catbox(avatar_file_source)
                 
-                # Copy file to avatars directory with character name
-                file_ext = os.path.splitext(avatar_file_source)[1]
-                avatar_file_dest = os.path.join(avatars_dir, f"user_{name}{file_ext}")
-                shutil.copy2(avatar_file_source, avatar_file_dest)
+                if uploaded_url:
+                    # Use the uploaded URL as avatar_url
+                    avatar_url = uploaded_url
+                    messagebox.showinfo("Success", f"Avatar uploaded successfully!\nURL: {uploaded_url}")
+                    
+                    # Still copy locally as backup
+                    avatars_dir = "character_avatars"
+                    os.makedirs(avatars_dir, exist_ok=True)
+                    file_ext = os.path.splitext(avatar_file_source)[1]
+                    avatar_file_dest = os.path.join(avatars_dir, f"user_{name}{file_ext}")
+                    shutil.copy2(avatar_file_source, avatar_file_dest)
+                else:
+                    messagebox.showwarning("Upload Failed", "Failed to upload avatar to catbox.moe. Keeping existing avatar URL.")
+                    # Keep existing URL if upload fails
+                    if not avatar_url:
+                        avatar_url = current_avatar_url
             
             # Update character in config
             self.config_manager.update_user_character(self.user_char_editing_index, name, display_name, description, avatar_url, avatar_file_dest)
