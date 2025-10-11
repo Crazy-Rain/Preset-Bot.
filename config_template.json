@@ -38,6 +38,7 @@
   "presets": [],
   "active_preset": null,
   "chat_history": {},
+  "channel_characters": {},
   "last_manual_send": {
     "server_id": "",
     "channel_id": ""

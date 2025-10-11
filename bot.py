@@ -76,6 +76,7 @@ class ConfigManager:
             "presets": [],
             "active_preset": None,
             "chat_history": {},
+            "channel_characters": {},
             "last_manual_send": {
                 "server_id": "",
                 "channel_id": ""
@@ -269,6 +270,28 @@ class ConfigManager:
             channel_key = str(channel_id)
             if channel_key in self.config["chat_history"]:
                 self.config["chat_history"][channel_key] = []
+                self.save_config()
+    
+    # Channel Character Management
+    def get_channel_character(self, channel_id: str) -> Optional[str]:
+        """Get the active character for a channel"""
+        if "channel_characters" not in self.config:
+            self.config["channel_characters"] = {}
+        return self.config["channel_characters"].get(str(channel_id))
+    
+    def set_channel_character(self, channel_id: str, character_name: str) -> None:
+        """Set the active character for a channel"""
+        if "channel_characters" not in self.config:
+            self.config["channel_characters"] = {}
+        self.config["channel_characters"][str(channel_id)] = character_name
+        self.save_config()
+    
+    def clear_channel_character(self, channel_id: str) -> None:
+        """Clear the active character for a channel"""
+        if "channel_characters" in self.config:
+            channel_key = str(channel_id)
+            if channel_key in self.config["channel_characters"]:
+                del self.config["channel_characters"][channel_key]
                 self.save_config()
     
     # Last Manual Send Target Management
@@ -628,8 +651,14 @@ class PresetBot(commands.Bot):
             
             # Get user character if specified
             user_char = None
+            user_char_info = ""
             if user_character:
                 user_char = self.config_manager.get_user_character_by_name(user_character)
+                if user_char:
+                    # Build persona information from user character
+                    user_char_info = f"\n\nUser is playing as {user_char.get('display_name', user_character)}."
+                    if user_char.get('description'):
+                        user_char_info += f"\nCharacter description: {user_char.get('description')}"
             
             # Build the chat message
             channel_id = str(ctx.channel.id)
@@ -664,9 +693,19 @@ class PresetBot(commands.Bot):
                     })
             
             # Get AI response with context
-            ai_character = self.config_manager.get_characters()[0].get("name") if self.config_manager.get_characters() else None
+            # Use channel-specific character if set, otherwise use first character
+            channel_id = str(ctx.channel.id)
+            ai_character = self.config_manager.get_channel_character(channel_id)
+            if not ai_character and self.config_manager.get_characters():
+                ai_character = self.config_manager.get_characters()[0].get("name")
+            
+            # Add user character info to the message if present
+            full_message = message
+            if user_char_info:
+                full_message = message + user_char_info
+            
             response = await self.ai_handler.get_ai_response(
-                message,
+                full_message,
                 character_name=ai_character,
                 additional_context=context_messages
             )
@@ -696,6 +735,32 @@ class PresetBot(commands.Bot):
             channel_id = str(ctx.channel.id)
             self.config_manager.clear_chat_history(channel_id)
             await ctx.send("Chat history cleared for this channel.")
+        
+        @self.command(name='character')
+        async def set_character(ctx, character_name: Optional[str] = None):
+            """
+            Set which character the bot responds as in this channel
+            Usage: !character <character_name>
+            Usage: !character (with no name to clear)
+            Example: !character dashie
+            """
+            channel_id = str(ctx.channel.id)
+            
+            if not character_name:
+                # Clear the channel character
+                self.config_manager.clear_channel_character(channel_id)
+                await ctx.send("Channel character cleared. Bot will use default character.")
+                return
+            
+            # Check if character exists
+            char = self.config_manager.get_character_by_name(character_name)
+            if not char:
+                await ctx.send(f"Error: Character '{character_name}' not found. Use !characters to see available characters.")
+                return
+            
+            # Set the channel character
+            self.config_manager.set_channel_character(channel_id, character_name)
+            await ctx.send(f"✓ Channel character set to '{char.get('display_name', character_name)}'. All responses in this channel will use this character.")
         
         @self.command(name='image')
         async def image(ctx, character_name: str, url: Optional[str] = None):
