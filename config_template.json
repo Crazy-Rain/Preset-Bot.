@@ -7,6 +7,11 @@
     "api_key": "",
     "model": "gpt-3.5-turbo"
   },
+  "thinking_tags": {
+    "enabled": false,
+    "start_tag": "<think>",
+    "end_tag": "</think>"
+  },
   "characters": [
     {
       "name": "assistant",

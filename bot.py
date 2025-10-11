@@ -44,6 +44,11 @@ class ConfigManager:
                 "api_key": "",
                 "model": "gpt-3.5-turbo"
             },
+            "thinking_tags": {
+                "enabled": False,
+                "start_tag": "<think>",
+                "end_tag": "</think>"
+            },
             "characters": [
                 {
                     "name": "assistant",
@@ -265,6 +270,50 @@ class ConfigManager:
     def get_available_models(self) -> list:
         """Get cached list of available models"""
         return self.config.get("openai", {}).get("available_models", [])
+    
+    # Thinking Tags Management
+    def get_thinking_tags_config(self) -> Dict[str, Any]:
+        """Get thinking tags configuration"""
+        return self.config.get("thinking_tags", {
+            "enabled": False,
+            "start_tag": "<think>",
+            "end_tag": "</think>"
+        })
+    
+    def set_thinking_tags_config(self, enabled: bool, start_tag: str, end_tag: str) -> None:
+        """Set thinking tags configuration"""
+        if "thinking_tags" not in self.config:
+            self.config["thinking_tags"] = {}
+        self.config["thinking_tags"]["enabled"] = enabled
+        self.config["thinking_tags"]["start_tag"] = start_tag
+        self.config["thinking_tags"]["end_tag"] = end_tag
+        self.save_config()
+    
+    def remove_thinking_tags(self, text: str) -> str:
+        """Remove thinking tag sections from text if enabled"""
+        thinking_config = self.get_thinking_tags_config()
+        
+        if not thinking_config.get("enabled", False):
+            return text
+        
+        start_tag = thinking_config.get("start_tag", "<think>")
+        end_tag = thinking_config.get("end_tag", "</think>")
+        
+        if not start_tag or not end_tag:
+            return text
+        
+        # Remove all occurrences of content between start_tag and end_tag
+        import re
+        # Use re.DOTALL to match newlines as well
+        pattern = re.escape(start_tag) + r'.*?' + re.escape(end_tag)
+        cleaned_text = re.sub(pattern, '', text, flags=re.DOTALL)
+        
+        # Clean up extra whitespace
+        cleaned_text = re.sub(r'\n\s*\n\s*\n', '\n\n', cleaned_text)  # Remove excessive newlines
+        cleaned_text = cleaned_text.strip()
+        
+        return cleaned_text
+
 
 
 class AIResponseHandler:
@@ -398,7 +447,12 @@ class AIResponseHandler:
                 messages=messages,
                 **ai_config
             )
-            return response.choices[0].message.content
+            response_text = response.choices[0].message.content
+            
+            # Remove thinking tags if enabled
+            response_text = self.config_manager.remove_thinking_tags(response_text)
+            
+            return response_text
         except Exception as e:
             return f"Error getting AI response: {str(e)}"
 

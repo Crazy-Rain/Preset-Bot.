@@ -93,6 +93,28 @@ class PresetBotGUI:
         # Fetch Models button
         ttk.Button(openai_frame, text="Fetch Models", command=self.fetch_models).grid(row=2, column=2, pady=5, padx=5)
         
+        # Thinking Tags Configuration
+        thinking_frame = ttk.LabelFrame(self.config_frame, text="Thinking Tags (Remove AI Internal Thoughts)", padding=10)
+        thinking_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        self.thinking_enabled_var = tk.BooleanVar()
+        ttk.Checkbutton(thinking_frame, text="Enable Thinking Tag Removal", variable=self.thinking_enabled_var).grid(row=0, column=0, columnspan=3, sticky=tk.W, pady=5)
+        
+        ttk.Label(thinking_frame, text="Start Tag:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        self.thinking_start_tag_entry = ttk.Entry(thinking_frame, width=20)
+        self.thinking_start_tag_entry.grid(row=1, column=1, pady=5, padx=5, sticky=tk.W)
+        self.thinking_start_tag_entry.insert(0, "<think>")
+        ttk.Label(thinking_frame, text="(e.g., <think>, <thinking>)", font=('TkDefaultFont', 8, 'italic')).grid(row=1, column=2, sticky=tk.W, padx=5)
+        
+        ttk.Label(thinking_frame, text="End Tag:").grid(row=2, column=0, sticky=tk.W, pady=5)
+        self.thinking_end_tag_entry = ttk.Entry(thinking_frame, width=20)
+        self.thinking_end_tag_entry.grid(row=2, column=1, pady=5, padx=5, sticky=tk.W)
+        self.thinking_end_tag_entry.insert(0, "</think>")
+        ttk.Label(thinking_frame, text="(e.g., </think>, </thinking>)", font=('TkDefaultFont', 8, 'italic')).grid(row=2, column=2, sticky=tk.W, padx=5)
+        
+        ttk.Label(thinking_frame, text="Content between these tags will be removed from AI responses before sending to Discord.", 
+                 font=('TkDefaultFont', 8, 'italic'), wraplength=600).grid(row=3, column=0, columnspan=3, sticky=tk.W, pady=5)
+        
         # Buttons
         button_frame = ttk.Frame(self.config_frame)
         button_frame.pack(fill=tk.X, padx=10, pady=10)
@@ -256,6 +278,14 @@ class PresetBotGUI:
         self.channel_id_entry.delete(0, tk.END)
         self.channel_id_entry.insert(0, last_target.get("channel_id", ""))
         
+        # Thinking Tags Configuration
+        thinking_config = self.config_manager.get_thinking_tags_config()
+        self.thinking_enabled_var.set(thinking_config.get("enabled", False))
+        self.thinking_start_tag_entry.delete(0, tk.END)
+        self.thinking_start_tag_entry.insert(0, thinking_config.get("start_tag", "<think>"))
+        self.thinking_end_tag_entry.delete(0, tk.END)
+        self.thinking_end_tag_entry.insert(0, thinking_config.get("end_tag", "</think>"))
+        
         self.config_status_label.config(text="Configuration loaded", foreground="green")
     
     def save_config(self):
@@ -277,6 +307,12 @@ class PresetBotGUI:
             model = self.model_var.get()
             if model:
                 self.config_manager.set_selected_model(model)
+            
+            # Save thinking tags configuration
+            thinking_enabled = self.thinking_enabled_var.get()
+            thinking_start_tag = self.thinking_start_tag_entry.get()
+            thinking_end_tag = self.thinking_end_tag_entry.get()
+            self.config_manager.set_thinking_tags_config(thinking_enabled, thinking_start_tag, thinking_end_tag)
             
             self.config_status_label.config(text="Configuration saved successfully!", foreground="green")
             messagebox.showinfo("Success", "Configuration saved successfully!")
