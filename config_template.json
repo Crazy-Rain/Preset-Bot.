@@ -1,0 +1,15 @@
+{
+  "discord": {
+    "token": ""
+  },
+  "openai": {
+    "base_url": "https://api.openai.com/v1",
+    "api_key": ""
+  },
+  "characters": [
+    {
+      "name": "Assistant",
+      "system_prompt": "You are a helpful assistant."
+    }
+  ]
+}
