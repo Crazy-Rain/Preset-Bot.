@@ -1,0 +1,18 @@
+{
+  "discord": {
+    "token": ""
+  },
+  "openai": {
+    "base_url": "https://api.openai.com/v1",
+    "api_key": ""
+  },
+  "characters": [
+    {
+      "name": "assistant",
+      "display_name": "Assistant",
+      "description": "You are a helpful assistant.",
+      "avatar_url": "",
+      "avatar_file": ""
+    }
+  ]
+}
