@@ -45,8 +45,11 @@ class ConfigManager:
             },
             "characters": [
                 {
-                    "name": "Assistant",
-                    "system_prompt": "You are a helpful assistant."
+                    "name": "assistant",
+                    "display_name": "Assistant",
+                    "description": "You are a helpful assistant.",
+                    "avatar_url": "",
+                    "avatar_file": ""
                 }
             ]
         }
@@ -85,15 +88,45 @@ class ConfigManager:
         """Get list of characters"""
         return self.config.get("characters", [])
     
-    def add_character(self, name: str, system_prompt: str) -> None:
+    def add_character(self, name: str, display_name: str, description: str, 
+                     avatar_url: str = "", avatar_file: str = "") -> None:
         """Add a new character"""
         if "characters" not in self.config:
             self.config["characters"] = []
         self.config["characters"].append({
             "name": name,
-            "system_prompt": system_prompt
+            "display_name": display_name,
+            "description": description,
+            "avatar_url": avatar_url,
+            "avatar_file": avatar_file
         })
         self.save_config()
+    
+    def update_character(self, index: int, name: str, display_name: str, 
+                        description: str, avatar_url: str = "", avatar_file: str = "") -> None:
+        """Update an existing character"""
+        if "characters" in self.config and 0 <= index < len(self.config["characters"]):
+            self.config["characters"][index] = {
+                "name": name,
+                "display_name": display_name,
+                "description": description,
+                "avatar_url": avatar_url,
+                "avatar_file": avatar_file
+            }
+            self.save_config()
+    
+    def delete_character(self, index: int) -> None:
+        """Delete a character"""
+        if "characters" in self.config and 0 <= index < len(self.config["characters"]):
+            self.config["characters"].pop(index)
+            self.save_config()
+    
+    def get_character_by_name(self, name: str) -> Optional[Dict[str, Any]]:
+        """Get a character by name"""
+        for char in self.get_characters():
+            if char.get("name", "").lower() == name.lower():
+                return char
+        return None
 
 
 class AIResponseHandler:
@@ -140,15 +173,15 @@ class AIResponseHandler:
         if not self.client:
             return "Error: OpenAI API not configured. Please set BASE URL and API KEY."
         
-        # Get character system prompt
+        # Get character description as system prompt
         characters = self.config_manager.get_characters()
         system_prompt = "You are a helpful assistant."
         
         if character_name:
-            for char in characters:
-                if char["name"] == character_name:
-                    system_prompt = char["system_prompt"]
-                    break
+            char = self.config_manager.get_character_by_name(character_name)
+            if char:
+                # Use description field as system prompt, fallback to system_prompt for backward compatibility
+                system_prompt = char.get("description") or char.get("system_prompt", "You are a helpful assistant.")
         
         try:
             response = await asyncio.to_thread(
@@ -198,10 +231,10 @@ class PresetBot(commands.Bot):
         
         @self.command(name='addcharacter')
         @commands.has_permissions(administrator=True)
-        async def add_character(ctx, name: str, *, system_prompt: str):
+        async def add_character(ctx, name: str, display_name: str, *, description: str):
             """Add a new character (Admin only)"""
-            self.config_manager.add_character(name, system_prompt)
-            await ctx.send(f"Character '{name}' has been added.")
+            self.config_manager.add_character(name, display_name, description)
+            await ctx.send(f"Character '{display_name}' ({name}) has been added.")
         
         @self.command(name='characters')
         async def list_characters(ctx):
@@ -213,9 +246,11 @@ class PresetBot(commands.Bot):
             
             embed = discord.Embed(title="Available Characters", color=discord.Color.blue())
             for char in characters:
+                display_name = char.get("display_name", char.get("name", "Unknown"))
+                description = char.get("description") or char.get("system_prompt", "No description")
                 embed.add_field(
-                    name=char["name"],
-                    value=char["system_prompt"][:100] + "..." if len(char["system_prompt"]) > 100 else char["system_prompt"],
+                    name=f"{display_name} ({char.get('name', 'unknown')})",
+                    value=description[:100] + "..." if len(description) > 100 else description,
                     inline=False
                 )
             await ctx.send(embed=embed)
@@ -224,7 +259,7 @@ class PresetBot(commands.Bot):
         @commands.has_permissions(administrator=True)
         async def manual_send(ctx, server_id: str, channel_id: str, character: str, *, message: str):
             """
-            Manually send a message to a Discord channel using AI
+            Manually send a message to a Discord channel using AI and webhooks
             Usage: !manualsend <server_id> <channel_id> <character> <message>
             """
             try:
@@ -234,13 +269,19 @@ class PresetBot(commands.Bot):
                     await ctx.send(f"Error: Channel {channel_id} not found.")
                     return
                 
+                # Get character data
+                char = self.config_manager.get_character_by_name(character)
+                if not char:
+                    await ctx.send(f"Error: Character '{character}' not found.")
+                    return
+                
                 # Get AI response
-                await ctx.send(f"Generating AI response with character '{character}'...")
+                await ctx.send(f"Generating AI response with character '{char.get('display_name', character)}'...")
                 ai_response = await self.ai_handler.get_ai_response(message, character)
                 
-                # Send to target channel
-                await channel.send(ai_response)
-                await ctx.send(f"Message sent to channel {channel.mention} in server {server_id}")
+                # Send via webhook
+                await self.send_via_webhook(channel, ai_response, char)
+                await ctx.send(f"Message sent to channel {channel.mention} as {char.get('display_name', character)}")
                 
             except ValueError:
                 await ctx.send("Error: Invalid server_id or channel_id. Must be numeric.")
@@ -253,7 +294,7 @@ class PresetBot(commands.Bot):
             Ask the AI a question
             Usage: !ask [character] <message>
             """
-            if character and character in [c["name"] for c in self.config_manager.get_characters()]:
+            if character and character in [c.get("name") for c in self.config_manager.get_characters()]:
                 response = await self.ai_handler.get_ai_response(message, character)
             else:
                 # If character not found, treat it as part of the message
@@ -261,6 +302,53 @@ class PresetBot(commands.Bot):
                 response = await self.ai_handler.get_ai_response(full_message)
             
             await ctx.send(response)
+    
+    async def send_via_webhook(self, channel, content: str, character: Dict[str, Any]) -> None:
+        """
+        Send a message via webhook with character identity
+        
+        Args:
+            channel: Discord channel to send to
+            content: Message content
+            character: Character dictionary with display_name, avatar info
+        """
+        # Get or create webhook for this channel
+        webhooks = await channel.webhooks()
+        webhook = None
+        
+        # Look for existing Preset Bot webhook
+        for wh in webhooks:
+            if wh.name == "Preset Bot Character":
+                webhook = wh
+                break
+        
+        # Create webhook if it doesn't exist
+        if not webhook:
+            webhook = await channel.create_webhook(name="Preset Bot Character")
+        
+        # Get character display info
+        display_name = character.get("display_name", character.get("name", "Character"))
+        avatar_url = character.get("avatar_url", "")
+        avatar_file = character.get("avatar_file", "")
+        
+        # If avatar_file is specified, read and use it
+        avatar_bytes = None
+        if avatar_file and os.path.exists(avatar_file):
+            try:
+                with open(avatar_file, 'rb') as f:
+                    avatar_bytes = f.read()
+            except Exception:
+                pass
+        
+        # Send via webhook
+        if avatar_url:
+            await webhook.send(content=content, username=display_name, avatar_url=avatar_url)
+        elif avatar_bytes:
+            # Note: Discord webhooks don't support sending avatar as bytes in each message
+            # The avatar_url parameter is required for per-message avatars
+            await webhook.send(content=content, username=display_name)
+        else:
+            await webhook.send(content=content, username=display_name)
     
     async def on_ready(self):
         """Called when bot is ready"""

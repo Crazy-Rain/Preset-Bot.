@@ -42,17 +42,17 @@ def test_config_manager():
     assert openai_cfg["api_key"] == "test_key_xyz789", "OpenAI API key mismatch"
     print("✓ OpenAI configuration set and retrieved correctly")
     
-    # Test character management
+    # Test character management with new structure
     initial_chars = len(config_mgr.get_characters())
-    config_mgr.add_character("TestBot", "You are a friendly test bot.")
-    config_mgr.add_character("HelperBot", "You are a helpful assistant bot.")
+    config_mgr.add_character("testbot", "TestBot", "You are a friendly test bot.")
+    config_mgr.add_character("helperbot", "HelperBot", "You are a helpful assistant bot.")
     
     characters = config_mgr.get_characters()
     assert len(characters) == initial_chars + 2, "Character count mismatch"
     
     char_names = [c["name"] for c in characters]
-    assert "TestBot" in char_names, "TestBot not found"
-    assert "HelperBot" in char_names, "HelperBot not found"
+    assert "testbot" in char_names, "TestBot not found"
+    assert "helperbot" in char_names, "HelperBot not found"
     print("✓ Characters added and retrieved correctly")
     
     # Test config persistence
@@ -123,7 +123,9 @@ def test_config_structure():
     # Test that default character exists
     assert len(template["characters"]) > 0, "Should have at least one default character"
     assert "name" in template["characters"][0], "Character missing name"
-    assert "system_prompt" in template["characters"][0], "Character missing system_prompt"
+    # Support both old system_prompt and new description fields
+    has_description = "description" in template["characters"][0] or "system_prompt" in template["characters"][0]
+    assert has_description, "Character missing description/system_prompt"
     print("✓ Default character structure is valid")
     
     return True

@@ -3,11 +3,12 @@ Preset Bot - GUI Configuration and Manual Send Interface
 """
 
 import tkinter as tk
-from tkinter import ttk, messagebox, scrolledtext
+from tkinter import ttk, messagebox, scrolledtext, filedialog
 import json
 import os
 import asyncio
 import threading
+import shutil
 from typing import Optional
 from bot import ConfigManager, AIResponseHandler
 import discord
@@ -135,26 +136,77 @@ class PresetBotGUI:
         add_frame = ttk.LabelFrame(self.characters_frame, text="Add New Character", padding=10)
         add_frame.pack(fill=tk.X, padx=10, pady=10)
         
-        ttk.Label(add_frame, text="Character Name:").grid(row=0, column=0, sticky=tk.W, pady=5)
+        # Character Name (ID)
+        ttk.Label(add_frame, text="Character Name (ID):").grid(row=0, column=0, sticky=tk.W, pady=5)
         self.char_name_entry = ttk.Entry(add_frame, width=30)
-        self.char_name_entry.grid(row=0, column=1, pady=5, padx=5)
+        self.char_name_entry.grid(row=0, column=1, pady=5, padx=5, sticky=tk.W)
+        ttk.Label(add_frame, text="(lowercase, no spaces)", font=('TkDefaultFont', 8, 'italic')).grid(row=0, column=2, sticky=tk.W, padx=5)
         
-        ttk.Label(add_frame, text="System Prompt:").grid(row=1, column=0, sticky=tk.NW, pady=5)
-        self.char_prompt_text = scrolledtext.ScrolledText(add_frame, height=5, width=50)
-        self.char_prompt_text.grid(row=1, column=1, pady=5, padx=5)
+        # Display Name
+        ttk.Label(add_frame, text="Display Name:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        self.char_display_name_entry = ttk.Entry(add_frame, width=30)
+        self.char_display_name_entry.grid(row=1, column=1, pady=5, padx=5, sticky=tk.W)
+        ttk.Label(add_frame, text="(shown in Discord)", font=('TkDefaultFont', 8, 'italic')).grid(row=1, column=2, sticky=tk.W, padx=5)
         
-        ttk.Button(add_frame, text="Add Character", command=self.add_character).grid(row=2, column=1, pady=5)
+        # Description
+        ttk.Label(add_frame, text="Description:").grid(row=2, column=0, sticky=tk.NW, pady=5)
+        self.char_description_text = scrolledtext.ScrolledText(add_frame, height=5, width=50)
+        self.char_description_text.grid(row=2, column=1, columnspan=2, pady=5, padx=5, sticky=tk.W)
+        ttk.Label(add_frame, text="(AI system prompt)", font=('TkDefaultFont', 8, 'italic')).grid(row=3, column=1, sticky=tk.W, padx=5)
+        
+        # Avatar selection
+        avatar_frame = ttk.LabelFrame(add_frame, text="Avatar/Icon", padding=5)
+        avatar_frame.grid(row=4, column=0, columnspan=3, sticky=tk.EW, pady=10, padx=5)
+        
+        # Avatar URL option
+        ttk.Label(avatar_frame, text="Avatar URL:").grid(row=0, column=0, sticky=tk.W, pady=5)
+        self.char_avatar_url_entry = ttk.Entry(avatar_frame, width=40)
+        self.char_avatar_url_entry.grid(row=0, column=1, pady=5, padx=5, sticky=tk.W)
+        
+        # OR separator
+        ttk.Label(avatar_frame, text="--- OR ---").grid(row=1, column=0, columnspan=2, pady=5)
+        
+        # Avatar file option
+        ttk.Label(avatar_frame, text="Avatar File:").grid(row=2, column=0, sticky=tk.W, pady=5)
+        self.char_avatar_file_var = tk.StringVar()
+        self.char_avatar_file_entry = ttk.Entry(avatar_frame, width=30, textvariable=self.char_avatar_file_var, state='readonly')
+        self.char_avatar_file_entry.grid(row=2, column=1, pady=5, padx=5, sticky=tk.W)
+        ttk.Button(avatar_frame, text="Browse...", command=self.browse_avatar_file).grid(row=2, column=2, pady=5, padx=5)
+        
+        ttk.Button(add_frame, text="Add Character", command=self.add_character).grid(row=5, column=1, pady=10)
         
         # List Characters
         list_frame = ttk.LabelFrame(self.characters_frame, text="Current Characters", padding=10)
         list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
-        self.characters_listbox = tk.Listbox(list_frame, height=10)
-        self.characters_listbox.pack(fill=tk.BOTH, expand=True, pady=5)
+        # Scrollbar for listbox
+        scrollbar = ttk.Scrollbar(list_frame)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
-        ttk.Button(list_frame, text="Refresh List", command=self.refresh_characters_list).pack(pady=5)
+        self.characters_listbox = tk.Listbox(list_frame, height=10, yscrollcommand=scrollbar.set)
+        self.characters_listbox.pack(fill=tk.BOTH, expand=True, pady=5, side=tk.LEFT)
+        scrollbar.config(command=self.characters_listbox.yview)
+        
+        # Buttons for character management
+        button_frame = ttk.Frame(list_frame)
+        button_frame.pack(fill=tk.X, pady=5)
+        
+        ttk.Button(button_frame, text="Refresh List", command=self.refresh_characters_list).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Delete Selected", command=self.delete_character).pack(side=tk.LEFT, padx=5)
         
         self.refresh_characters_list()
+    
+    def browse_avatar_file(self):
+        """Browse for avatar image file"""
+        filename = filedialog.askopenfilename(
+            title="Select Avatar Image",
+            filetypes=[
+                ("Image files", "*.png *.jpg *.jpeg *.gif *.webp"),
+                ("All files", "*.*")
+            ]
+        )
+        if filename:
+            self.char_avatar_file_var.set(filename)
     
     def load_current_config(self):
         """Load current configuration into GUI"""
@@ -228,7 +280,7 @@ class PresetBotGUI:
         threading.Thread(target=test, daemon=True).start()
     
     def send_manual_message(self):
-        """Send manual message through Discord bot"""
+        """Send manual message through Discord bot using webhook"""
         server_id = self.server_id_entry.get()
         channel_id = self.channel_id_entry.get()
         character = self.character_var.get()
@@ -250,6 +302,13 @@ class PresetBotGUI:
         
         def send():
             try:
+                # Get character data
+                char_data = self.config_manager.get_character_by_name(character)
+                if not char_data:
+                    self.send_status_label.config(text="Character not found", foreground="red")
+                    messagebox.showerror("Error", f"Character '{character}' not found")
+                    return
+                
                 # Get AI response
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
@@ -266,9 +325,10 @@ class PresetBotGUI:
                         try:
                             channel = self.discord_client.get_channel(int(channel_id))
                             if channel:
-                                await channel.send(ai_response)
+                                # Send via webhook
+                                await self.send_via_webhook(channel, ai_response, char_data)
                                 self.send_status_label.config(text=f"Message sent successfully!", foreground="green")
-                                messagebox.showinfo("Success", f"Message sent to channel {channel_id}")
+                                messagebox.showinfo("Success", f"Message sent to channel {channel_id} as {char_data.get('display_name', character)}")
                             else:
                                 self.send_status_label.config(text="Channel not found", foreground="red")
                                 messagebox.showerror("Error", f"Channel {channel_id} not found")
@@ -294,6 +354,39 @@ class PresetBotGUI:
         
         threading.Thread(target=send, daemon=True).start()
     
+    async def send_via_webhook(self, channel, content: str, character: dict) -> None:
+        """
+        Send a message via webhook with character identity
+        
+        Args:
+            channel: Discord channel to send to
+            content: Message content
+            character: Character dictionary with display_name, avatar info
+        """
+        # Get or create webhook for this channel
+        webhooks = await channel.webhooks()
+        webhook = None
+        
+        # Look for existing Preset Bot webhook
+        for wh in webhooks:
+            if wh.name == "Preset Bot Character":
+                webhook = wh
+                break
+        
+        # Create webhook if it doesn't exist
+        if not webhook:
+            webhook = await channel.create_webhook(name="Preset Bot Character")
+        
+        # Get character display info
+        display_name = character.get("display_name", character.get("name", "Character"))
+        avatar_url = character.get("avatar_url", "")
+        
+        # Send via webhook
+        if avatar_url:
+            await webhook.send(content=content, username=display_name, avatar_url=avatar_url)
+        else:
+            await webhook.send(content=content, username=display_name)
+    
     def clear_message(self):
         """Clear message text"""
         self.message_text.delete("1.0", tk.END)
@@ -301,36 +394,88 @@ class PresetBotGUI:
     def update_character_dropdown(self):
         """Update character dropdown with current characters"""
         characters = self.config_manager.get_characters()
-        character_names = [char["name"] for char in characters]
+        character_names = [char.get("name", "unknown") for char in characters]
         self.character_dropdown['values'] = character_names
         if character_names:
             self.character_var.set(character_names[0])
     
     def add_character(self):
         """Add a new character"""
-        name = self.char_name_entry.get()
-        prompt = self.char_prompt_text.get("1.0", tk.END).strip()
+        name = self.char_name_entry.get().strip().lower().replace(" ", "_")
+        display_name = self.char_display_name_entry.get().strip()
+        description = self.char_description_text.get("1.0", tk.END).strip()
+        avatar_url = self.char_avatar_url_entry.get().strip()
+        avatar_file_source = self.char_avatar_file_var.get().strip()
         
-        if not name or not prompt:
-            messagebox.showerror("Error", "Please enter both character name and system prompt")
+        if not name or not display_name or not description:
+            messagebox.showerror("Error", "Please enter character name, display name, and description")
             return
         
         try:
-            self.config_manager.add_character(name, prompt)
+            # Handle avatar file if provided
+            avatar_file_dest = ""
+            if avatar_file_source and os.path.exists(avatar_file_source):
+                # Create avatars directory if it doesn't exist
+                avatars_dir = "character_avatars"
+                os.makedirs(avatars_dir, exist_ok=True)
+                
+                # Copy file to avatars directory with character name
+                file_ext = os.path.splitext(avatar_file_source)[1]
+                avatar_file_dest = os.path.join(avatars_dir, f"{name}{file_ext}")
+                shutil.copy2(avatar_file_source, avatar_file_dest)
+            
+            # Add character to config
+            self.config_manager.add_character(name, display_name, description, avatar_url, avatar_file_dest)
+            
+            # Clear form
             self.char_name_entry.delete(0, tk.END)
-            self.char_prompt_text.delete("1.0", tk.END)
+            self.char_display_name_entry.delete(0, tk.END)
+            self.char_description_text.delete("1.0", tk.END)
+            self.char_avatar_url_entry.delete(0, tk.END)
+            self.char_avatar_file_var.set("")
+            
             self.refresh_characters_list()
             self.update_character_dropdown()
-            messagebox.showinfo("Success", f"Character '{name}' added successfully!")
+            messagebox.showinfo("Success", f"Character '{display_name}' added successfully!")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to add character: {str(e)}")
+    
+    def delete_character(self):
+        """Delete selected character"""
+        selection = self.characters_listbox.curselection()
+        if not selection:
+            messagebox.showwarning("Warning", "Please select a character to delete")
+            return
+        
+        index = selection[0]
+        characters = self.config_manager.get_characters()
+        if 0 <= index < len(characters):
+            char_name = characters[index].get("display_name", characters[index].get("name", "Unknown"))
+            
+            if messagebox.askyesno("Confirm Delete", f"Are you sure you want to delete character '{char_name}'?"):
+                try:
+                    # Delete avatar file if it exists
+                    avatar_file = characters[index].get("avatar_file", "")
+                    if avatar_file and os.path.exists(avatar_file):
+                        os.remove(avatar_file)
+                    
+                    self.config_manager.delete_character(index)
+                    self.refresh_characters_list()
+                    self.update_character_dropdown()
+                    messagebox.showinfo("Success", f"Character '{char_name}' deleted successfully!")
+                except Exception as e:
+                    messagebox.showerror("Error", f"Failed to delete character: {str(e)}")
     
     def refresh_characters_list(self):
         """Refresh the characters list"""
         self.characters_listbox.delete(0, tk.END)
         characters = self.config_manager.get_characters()
         for char in characters:
-            self.characters_listbox.insert(tk.END, f"{char['name']}: {char['system_prompt'][:50]}...")
+            display_name = char.get("display_name", char.get("name", "Unknown"))
+            name_id = char.get("name", "unknown")
+            description = char.get("description") or char.get("system_prompt", "No description")
+            desc_preview = description[:40] + "..." if len(description) > 40 else description
+            self.characters_listbox.insert(tk.END, f"{display_name} ({name_id}): {desc_preview}")
         self.update_character_dropdown()
 
 

@@ -8,8 +8,11 @@
   },
   "characters": [
     {
-      "name": "Assistant",
-      "system_prompt": "You are a helpful assistant."
+      "name": "assistant",
+      "display_name": "Assistant",
+      "description": "You are a helpful assistant.",
+      "avatar_url": "",
+      "avatar_file": ""
     }
   ]
 }
