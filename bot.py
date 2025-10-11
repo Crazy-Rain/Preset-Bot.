@@ -80,7 +80,8 @@ class ConfigManager:
             "last_manual_send": {
                 "server_id": "",
                 "channel_id": ""
-            }
+            },
+            "lorebooks": []
         }
     
     def save_config(self, config: Optional[Dict[str, Any]] = None) -> None:
@@ -388,6 +389,158 @@ class ConfigManager:
         return cleaned_text
 
 
+    # Lorebook Management
+    def get_lorebooks(self) -> list:
+        """Get list of lorebooks"""
+        return self.config.get("lorebooks", [])
+    
+    def add_lorebook(self, name: str, active: bool = True) -> None:
+        """Add a new lorebook"""
+        if "lorebooks" not in self.config:
+            self.config["lorebooks"] = []
+        self.config["lorebooks"].append({
+            "name": name,
+            "active": active,
+            "entries": []
+        })
+        self.save_config()
+    
+    def update_lorebook(self, index: int, name: str, active: bool) -> None:
+        """Update an existing lorebook"""
+        if "lorebooks" in self.config and 0 <= index < len(self.config["lorebooks"]):
+            self.config["lorebooks"][index]["name"] = name
+            self.config["lorebooks"][index]["active"] = active
+            self.save_config()
+    
+    def delete_lorebook(self, index: int) -> None:
+        """Delete a lorebook"""
+        if "lorebooks" in self.config and 0 <= index < len(self.config["lorebooks"]):
+            self.config["lorebooks"].pop(index)
+            self.save_config()
+    
+    def get_lorebook_by_name(self, name: str) -> Optional[Dict[str, Any]]:
+        """Get a lorebook by name"""
+        for lorebook in self.get_lorebooks():
+            if lorebook.get("name", "").lower() == name.lower():
+                return lorebook
+        return None
+    
+    def get_lorebook_index_by_name(self, name: str) -> Optional[int]:
+        """Get a lorebook index by name"""
+        for i, lorebook in enumerate(self.get_lorebooks()):
+            if lorebook.get("name", "").lower() == name.lower():
+                return i
+        return None
+    
+    def toggle_lorebook_active(self, name: str, active: bool) -> bool:
+        """Toggle a lorebook's active state. Returns True if successful."""
+        index = self.get_lorebook_index_by_name(name)
+        if index is not None:
+            self.config["lorebooks"][index]["active"] = active
+            self.save_config()
+            return True
+        return False
+    
+    def add_lorebook_entry(self, lorebook_name: str, content: str, 
+                          insertion_type: str = "normal", keywords: Optional[list] = None) -> bool:
+        """
+        Add an entry to a lorebook
+        
+        Args:
+            lorebook_name: Name of the lorebook
+            content: The content to be injected
+            insertion_type: Either 'constant' or 'normal'
+            keywords: List of keywords for normal entries (None for constant entries)
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        index = self.get_lorebook_index_by_name(lorebook_name)
+        if index is None:
+            return False
+        
+        if insertion_type not in ["constant", "normal"]:
+            return False
+        
+        entry = {
+            "content": content,
+            "insertion_type": insertion_type,
+            "keywords": keywords or []
+        }
+        
+        self.config["lorebooks"][index]["entries"].append(entry)
+        self.save_config()
+        return True
+    
+    def update_lorebook_entry(self, lorebook_name: str, entry_index: int, 
+                             content: str, insertion_type: str, keywords: Optional[list] = None) -> bool:
+        """Update a lorebook entry"""
+        index = self.get_lorebook_index_by_name(lorebook_name)
+        if index is None:
+            return False
+        
+        if insertion_type not in ["constant", "normal"]:
+            return False
+        
+        lorebook = self.config["lorebooks"][index]
+        if 0 <= entry_index < len(lorebook.get("entries", [])):
+            lorebook["entries"][entry_index] = {
+                "content": content,
+                "insertion_type": insertion_type,
+                "keywords": keywords or []
+            }
+            self.save_config()
+            return True
+        return False
+    
+    def delete_lorebook_entry(self, lorebook_name: str, entry_index: int) -> bool:
+        """Delete a lorebook entry"""
+        index = self.get_lorebook_index_by_name(lorebook_name)
+        if index is None:
+            return False
+        
+        lorebook = self.config["lorebooks"][index]
+        if 0 <= entry_index < len(lorebook.get("entries", [])):
+            lorebook["entries"].pop(entry_index)
+            self.save_config()
+            return True
+        return False
+    
+    def get_active_lorebook_entries(self, message: str) -> list:
+        """
+        Get all relevant lorebook entries for a message.
+        Returns a list of content strings to inject.
+        
+        Args:
+            message: The user message to check against keywords
+            
+        Returns:
+            List of entry content strings
+        """
+        entries = []
+        message_lower = message.lower()
+        
+        for lorebook in self.get_lorebooks():
+            if not lorebook.get("active", False):
+                continue
+            
+            for entry in lorebook.get("entries", []):
+                insertion_type = entry.get("insertion_type", "normal")
+                
+                if insertion_type == "constant":
+                    # Always include constant entries
+                    entries.append(entry.get("content", ""))
+                elif insertion_type == "normal":
+                    # Check if any keyword matches
+                    keywords = entry.get("keywords", [])
+                    for keyword in keywords:
+                        if keyword.lower() in message_lower:
+                            entries.append(entry.get("content", ""))
+                            break  # Don't add the same entry multiple times
+        
+        return entries
+
+
 
 class AIResponseHandler:
     """Handles AI responses using OpenAI compatible API"""
@@ -490,6 +643,13 @@ class AIResponseHandler:
         # Add character system prompt if no preset or if preset doesn't have system messages
         if not preset or not any(msg.get("role") == "system" for msg in messages):
             messages.insert(0, {"role": "system", "content": system_prompt})
+        
+        # Add lorebook entries
+        lorebook_entries = self.config_manager.get_active_lorebook_entries(message)
+        if lorebook_entries:
+            # Combine all lorebook entries into a single system message
+            lorebook_content = "\n\n".join(lorebook_entries)
+            messages.append({"role": "system", "content": lorebook_content})
         
         # Add additional context (chat history)
         if additional_context:
@@ -838,6 +998,180 @@ class PresetBot(commands.Bot):
                 await ctx.send(f"✓ Avatar updated for character '{char.get('display_name', character_name)}'!")
             except Exception as e:
                 await ctx.send(f"Error updating avatar: {str(e)}")
+        
+        @self.command(name='lorebook')
+        async def lorebook(ctx, action: str, *args):
+            """
+            Manage lorebooks
+            Usage: 
+              !lorebook create <name> - Create a new lorebook
+              !lorebook list - List all lorebooks
+              !lorebook activate <name> - Activate a lorebook
+              !lorebook deactivate <name> - Deactivate a lorebook
+              !lorebook delete <name> - Delete a lorebook
+              !lorebook show <name> - Show entries in a lorebook
+              !lorebook addentry <lorebook_name> <constant|normal> <content> [keywords...] 
+                - Add entry (keywords only for normal type, use quotes for multi-word content)
+              !lorebook delentry <lorebook_name> <entry_index> - Delete entry by index
+            """
+            action = action.lower()
+            
+            if action == "create":
+                if len(args) < 1:
+                    await ctx.send("Usage: !lorebook create <name>")
+                    return
+                name = args[0]
+                
+                # Check if lorebook already exists
+                if self.config_manager.get_lorebook_by_name(name):
+                    await ctx.send(f"Error: Lorebook '{name}' already exists.")
+                    return
+                
+                self.config_manager.add_lorebook(name, active=True)
+                await ctx.send(f"✓ Lorebook '{name}' created and activated.")
+            
+            elif action == "list":
+                lorebooks = self.config_manager.get_lorebooks()
+                if not lorebooks:
+                    await ctx.send("No lorebooks found. Use `!lorebook create <name>` to create one.")
+                    return
+                
+                lines = ["**Lorebooks:**"]
+                for i, lb in enumerate(lorebooks):
+                    status = "✓ Active" if lb.get("active", False) else "✗ Inactive"
+                    entry_count = len(lb.get("entries", []))
+                    lines.append(f"{i+1}. **{lb.get('name')}** - {status} ({entry_count} entries)")
+                
+                await ctx.send("\n".join(lines))
+            
+            elif action == "activate":
+                if len(args) < 1:
+                    await ctx.send("Usage: !lorebook activate <name>")
+                    return
+                name = args[0]
+                
+                if self.config_manager.toggle_lorebook_active(name, True):
+                    await ctx.send(f"✓ Lorebook '{name}' activated.")
+                else:
+                    await ctx.send(f"Error: Lorebook '{name}' not found.")
+            
+            elif action == "deactivate":
+                if len(args) < 1:
+                    await ctx.send("Usage: !lorebook deactivate <name>")
+                    return
+                name = args[0]
+                
+                if self.config_manager.toggle_lorebook_active(name, False):
+                    await ctx.send(f"✓ Lorebook '{name}' deactivated.")
+                else:
+                    await ctx.send(f"Error: Lorebook '{name}' not found.")
+            
+            elif action == "delete":
+                if len(args) < 1:
+                    await ctx.send("Usage: !lorebook delete <name>")
+                    return
+                name = args[0]
+                
+                index = self.config_manager.get_lorebook_index_by_name(name)
+                if index is not None:
+                    self.config_manager.delete_lorebook(index)
+                    await ctx.send(f"✓ Lorebook '{name}' deleted.")
+                else:
+                    await ctx.send(f"Error: Lorebook '{name}' not found.")
+            
+            elif action == "show":
+                if len(args) < 1:
+                    await ctx.send("Usage: !lorebook show <name>")
+                    return
+                name = args[0]
+                
+                lorebook = self.config_manager.get_lorebook_by_name(name)
+                if not lorebook:
+                    await ctx.send(f"Error: Lorebook '{name}' not found.")
+                    return
+                
+                entries = lorebook.get("entries", [])
+                if not entries:
+                    await ctx.send(f"Lorebook '{name}' has no entries.")
+                    return
+                
+                status = "Active" if lorebook.get("active", False) else "Inactive"
+                lines = [f"**Lorebook: {name}** ({status})"]
+                lines.append("")
+                
+                for i, entry in enumerate(entries):
+                    entry_type = entry.get("insertion_type", "normal").upper()
+                    content = entry.get("content", "")
+                    keywords = entry.get("keywords", [])
+                    
+                    # Truncate long content for display
+                    if len(content) > 100:
+                        content = content[:100] + "..."
+                    
+                    lines.append(f"**Entry {i}** [{entry_type}]")
+                    lines.append(f"  Content: {content}")
+                    if entry_type == "NORMAL" and keywords:
+                        lines.append(f"  Keywords: {', '.join(keywords)}")
+                    lines.append("")
+                
+                # Discord has a 2000 character limit, so we might need to split
+                message = "\n".join(lines)
+                if len(message) <= 2000:
+                    await ctx.send(message)
+                else:
+                    # Send in chunks
+                    chunks = [message[i:i+1900] for i in range(0, len(message), 1900)]
+                    for chunk in chunks:
+                        await ctx.send(chunk)
+            
+            elif action == "addentry":
+                if len(args) < 3:
+                    await ctx.send("Usage: !lorebook addentry <lorebook_name> <constant|normal> <content> [keywords...]")
+                    return
+                
+                lorebook_name = args[0]
+                insertion_type = args[1].lower()
+                
+                if insertion_type not in ["constant", "normal"]:
+                    await ctx.send("Error: Insertion type must be 'constant' or 'normal'.")
+                    return
+                
+                # Content is the third argument
+                content = args[2]
+                
+                # Keywords are remaining arguments (only for normal type)
+                keywords = []
+                if insertion_type == "normal" and len(args) > 3:
+                    keywords = list(args[3:])
+                
+                if self.config_manager.add_lorebook_entry(lorebook_name, content, insertion_type, keywords):
+                    if insertion_type == "constant":
+                        await ctx.send(f"✓ Constant entry added to lorebook '{lorebook_name}'.")
+                    else:
+                        kw_str = f" with keywords: {', '.join(keywords)}" if keywords else " (no keywords)"
+                        await ctx.send(f"✓ Normal entry added to lorebook '{lorebook_name}'{kw_str}.")
+                else:
+                    await ctx.send(f"Error: Lorebook '{lorebook_name}' not found or invalid insertion type.")
+            
+            elif action == "delentry":
+                if len(args) < 2:
+                    await ctx.send("Usage: !lorebook delentry <lorebook_name> <entry_index>")
+                    return
+                
+                lorebook_name = args[0]
+                try:
+                    entry_index = int(args[1])
+                except ValueError:
+                    await ctx.send("Error: Entry index must be a number.")
+                    return
+                
+                if self.config_manager.delete_lorebook_entry(lorebook_name, entry_index):
+                    await ctx.send(f"✓ Entry {entry_index} deleted from lorebook '{lorebook_name}'.")
+                else:
+                    await ctx.send(f"Error: Could not delete entry. Check lorebook name and entry index.")
+            
+            else:
+                await ctx.send(f"Unknown action '{action}'. Use: create, list, activate, deactivate, delete, show, addentry, delentry")
     
     async def send_via_webhook(self, channel, content: str, character: Dict[str, Any]) -> None:
         """
