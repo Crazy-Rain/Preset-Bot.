@@ -1228,23 +1228,28 @@ class PresetBot(commands.Bot):
         avatar_url = character.get("avatar_url", "")
         avatar_file = character.get("avatar_file", "")
         
-        # If avatar_file is specified, read and use it
-        avatar_bytes = None
+        # Prepare avatar - use URL if available, otherwise attach local file
+        avatar_image = None
         if avatar_file and os.path.exists(avatar_file):
+            # Attach local avatar file as an image in the message
             try:
-                with open(avatar_file, 'rb') as f:
-                    avatar_bytes = f.read()
+                avatar_image = discord.File(avatar_file, filename="avatar.png")
             except Exception:
                 pass
         
         # Send via webhook
         if avatar_url:
-            await webhook.send(content=content, username=display_name, avatar_url=avatar_url)
-        elif avatar_bytes:
-            # Note: Discord webhooks don't support sending avatar as bytes in each message
-            # The avatar_url parameter is required for per-message avatars
-            await webhook.send(content=content, username=display_name)
+            # Use avatar_url for webhook avatar (preferred method)
+            if avatar_image:
+                # Both URL and local file - use URL for avatar, attach file
+                await webhook.send(content=content, username=display_name, avatar_url=avatar_url, file=avatar_image)
+            else:
+                await webhook.send(content=content, username=display_name, avatar_url=avatar_url)
+        elif avatar_image:
+            # Only local file - attach it to the message
+            await webhook.send(content=content, username=display_name, file=avatar_image)
         else:
+            # No avatar
             await webhook.send(content=content, username=display_name)
     
     async def on_ready(self):
