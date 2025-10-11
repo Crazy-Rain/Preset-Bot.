@@ -15,15 +15,37 @@ This is a Discord bot with AI response capabilities and manual send features. Th
 - Supports any OpenAI-compatible endpoint (OpenAI, Azure OpenAI, LocalAI, etc.)
 - Configuration saved to `config.json`
 
-### 2. Manual Send
+### 2. Preset System (NEW!)
+- Advanced AI configuration with multiple message blocks
+- Fine-tune AI behavior: temperature, top_p, reasoning, penalties
+- Save and load different presets for different scenarios
+- Active/Inactive blocks for easy testing
+
+### 3. User Characters (NEW!)
+- Create character profiles for users/players
+- Use with `!chat` command for role-playing
+- Avatar support (URL or file upload)
+
+### 4. Chat System (NEW!)
+- `!chat` command for tracked conversations
+- Per-channel message history
+- Context-aware responses using last 20 messages
+- Integrates with User Characters
+
+### 5. Manual Send
 - Send messages directly to Discord channels
 - Requires Server ID and Channel ID
 - Character selection from configured characters
 - AI generates responses based on your input and selected character
 
-### 3. Discord Bot Configuration
+### 6. Discord Bot Configuration
 - Secure token storage in config file
 - Easy token management through GUI or config file
+
+### 7. Character System
+- Create and manage different AI characters with custom system prompts
+- Avatar support for characters (URL or local file)
+- Webhook integration for character identity in Discord
 
 ## Installation
 
@@ -50,10 +72,12 @@ Run the GUI interface for easy configuration and manual message sending:
 python gui.py
 ```
 
-The GUI provides three tabs:
+The GUI provides five tabs:
 1. **Configuration**: Set Discord token and OpenAI API settings
-2. **Manual Send**: Send messages to Discord channels with AI responses
-3. **Characters**: Manage AI character personalities
+2. **Presets**: Configure AI behavior with advanced options and message blocks
+3. **Manual Send**: Send messages to Discord channels with AI responses
+4. **Characters**: Manage AI character personalities
+5. **User Characters**: Manage user/player character profiles for chat
 
 ### Bot Mode
 Run the Discord bot with commands:
@@ -68,6 +92,8 @@ Available commands:
 - `!characters` - List all characters
 - `!manualsend <server_id> <channel_id> <character> <message>` - Send manual message (Admin only)
 - `!ask [character] <message>` - Ask the AI a question
+- `!chat [character]: <message>` - Chat with context tracking (NEW!)
+- `!clearchat` - Clear chat history for current channel (Admin only, NEW!)
 
 ## Configuration
 
@@ -86,7 +112,11 @@ Available commands:
       "name": "Assistant",
       "system_prompt": "You are a helpful assistant."
     }
-  ]
+  ],
+  "user_characters": [],
+  "presets": [],
+  "active_preset": null,
+  "chat_history": {}
 }
 ```
 
@@ -117,6 +147,11 @@ Preset-Bot./
 ├── .gitignore             # Git ignore file
 └── README.md              # This file
 ```
+
+## Advanced Features
+
+For detailed information about the new Preset System, User Characters, and Chat features, see:
+- **[PRESET_FEATURES.md](PRESET_FEATURES.md)** - Comprehensive guide to presets, user characters, and chat system
 
 ## Security Notes
 - `config.json` is excluded from version control (.gitignore)

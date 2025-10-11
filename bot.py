@@ -41,7 +41,13 @@ class ConfigManager:
             },
             "openai": {
                 "base_url": "https://api.openai.com/v1",
-                "api_key": ""
+                "api_key": "",
+                "model": "gpt-3.5-turbo"
+            },
+            "thinking_tags": {
+                "enabled": False,
+                "start_tag": "<think>",
+                "end_tag": "</think>"
             },
             "characters": [
                 {
@@ -51,7 +57,15 @@ class ConfigManager:
                     "avatar_url": "",
                     "avatar_file": ""
                 }
-            ]
+            ],
+            "user_characters": [],
+            "presets": [],
+            "active_preset": None,
+            "chat_history": {},
+            "last_manual_send": {
+                "server_id": "",
+                "channel_id": ""
+            }
         }
     
     def save_config(self, config: Optional[Dict[str, Any]] = None) -> None:
@@ -127,6 +141,179 @@ class ConfigManager:
             if char.get("name", "").lower() == name.lower():
                 return char
         return None
+    
+    # User Characters Management
+    def get_user_characters(self) -> list:
+        """Get list of user characters"""
+        return self.config.get("user_characters", [])
+    
+    def add_user_character(self, name: str, display_name: str, description: str,
+                          avatar_url: str = "", avatar_file: str = "") -> None:
+        """Add a new user character"""
+        if "user_characters" not in self.config:
+            self.config["user_characters"] = []
+        self.config["user_characters"].append({
+            "name": name,
+            "display_name": display_name,
+            "description": description,
+            "avatar_url": avatar_url,
+            "avatar_file": avatar_file
+        })
+        self.save_config()
+    
+    def delete_user_character(self, index: int) -> None:
+        """Delete a user character"""
+        if "user_characters" in self.config and 0 <= index < len(self.config["user_characters"]):
+            self.config["user_characters"].pop(index)
+            self.save_config()
+    
+    def get_user_character_by_name(self, name: str) -> Optional[Dict[str, Any]]:
+        """Get a user character by name"""
+        for char in self.get_user_characters():
+            if char.get("name", "").lower() == name.lower():
+                return char
+        return None
+    
+    # Preset Management
+    def get_presets(self) -> list:
+        """Get list of presets"""
+        return self.config.get("presets", [])
+    
+    def add_preset(self, preset_data: Dict[str, Any]) -> None:
+        """Add a new preset"""
+        if "presets" not in self.config:
+            self.config["presets"] = []
+        self.config["presets"].append(preset_data)
+        self.save_config()
+    
+    def update_preset(self, index: int, preset_data: Dict[str, Any]) -> None:
+        """Update an existing preset"""
+        if "presets" in self.config and 0 <= index < len(self.config["presets"]):
+            self.config["presets"][index] = preset_data
+            self.save_config()
+    
+    def delete_preset(self, index: int) -> None:
+        """Delete a preset"""
+        if "presets" in self.config and 0 <= index < len(self.config["presets"]):
+            self.config["presets"].pop(index)
+            self.save_config()
+    
+    def get_preset_by_name(self, name: str) -> Optional[Dict[str, Any]]:
+        """Get a preset by name"""
+        for preset in self.get_presets():
+            if preset.get("name", "").lower() == name.lower():
+                return preset
+        return None
+    
+    def set_active_preset(self, preset_name: Optional[str]) -> None:
+        """Set the active preset"""
+        self.config["active_preset"] = preset_name
+        self.save_config()
+    
+    def get_active_preset(self) -> Optional[Dict[str, Any]]:
+        """Get the active preset"""
+        active_name = self.config.get("active_preset")
+        if active_name:
+            return self.get_preset_by_name(active_name)
+        return None
+    
+    # Chat History Management
+    def get_chat_history(self, channel_id: str) -> list:
+        """Get chat history for a channel"""
+        if "chat_history" not in self.config:
+            self.config["chat_history"] = {}
+        return self.config["chat_history"].get(str(channel_id), [])
+    
+    def add_chat_message(self, channel_id: str, message_data: Dict[str, Any]) -> None:
+        """Add a message to channel chat history"""
+        if "chat_history" not in self.config:
+            self.config["chat_history"] = {}
+        channel_key = str(channel_id)
+        if channel_key not in self.config["chat_history"]:
+            self.config["chat_history"][channel_key] = []
+        self.config["chat_history"][channel_key].append(message_data)
+        self.save_config()
+    
+    def clear_chat_history(self, channel_id: str) -> None:
+        """Clear chat history for a channel"""
+        if "chat_history" in self.config:
+            channel_key = str(channel_id)
+            if channel_key in self.config["chat_history"]:
+                self.config["chat_history"][channel_key] = []
+                self.save_config()
+    
+    # Last Manual Send Target Management
+    def get_last_manual_send_target(self) -> Dict[str, str]:
+        """Get last used server and channel IDs for manual send"""
+        return self.config.get("last_manual_send", {"server_id": "", "channel_id": ""})
+    
+    def set_last_manual_send_target(self, server_id: str, channel_id: str) -> None:
+        """Save last used server and channel IDs for manual send"""
+        if "last_manual_send" not in self.config:
+            self.config["last_manual_send"] = {}
+        self.config["last_manual_send"]["server_id"] = server_id
+        self.config["last_manual_send"]["channel_id"] = channel_id
+        self.save_config()
+    
+    # Model Management
+    def get_selected_model(self) -> str:
+        """Get the selected AI model"""
+        return self.config.get("openai", {}).get("model", "gpt-3.5-turbo")
+    
+    def set_selected_model(self, model: str) -> None:
+        """Set the selected AI model"""
+        if "openai" not in self.config:
+            self.config["openai"] = {}
+        self.config["openai"]["model"] = model
+        self.save_config()
+    
+    def get_available_models(self) -> list:
+        """Get cached list of available models"""
+        return self.config.get("openai", {}).get("available_models", [])
+    
+    # Thinking Tags Management
+    def get_thinking_tags_config(self) -> Dict[str, Any]:
+        """Get thinking tags configuration"""
+        return self.config.get("thinking_tags", {
+            "enabled": False,
+            "start_tag": "<think>",
+            "end_tag": "</think>"
+        })
+    
+    def set_thinking_tags_config(self, enabled: bool, start_tag: str, end_tag: str) -> None:
+        """Set thinking tags configuration"""
+        if "thinking_tags" not in self.config:
+            self.config["thinking_tags"] = {}
+        self.config["thinking_tags"]["enabled"] = enabled
+        self.config["thinking_tags"]["start_tag"] = start_tag
+        self.config["thinking_tags"]["end_tag"] = end_tag
+        self.save_config()
+    
+    def remove_thinking_tags(self, text: str) -> str:
+        """Remove thinking tag sections from text if enabled"""
+        thinking_config = self.get_thinking_tags_config()
+        
+        if not thinking_config.get("enabled", False):
+            return text
+        
+        start_tag = thinking_config.get("start_tag", "<think>")
+        end_tag = thinking_config.get("end_tag", "</think>")
+        
+        if not start_tag or not end_tag:
+            return text
+        
+        # Remove all occurrences of content between start_tag and end_tag
+        import re
+        # Use re.DOTALL to match newlines as well
+        pattern = re.escape(start_tag) + r'.*?' + re.escape(end_tag)
+        cleaned_text = re.sub(pattern, '', text, flags=re.DOTALL)
+        
+        # Clean up extra whitespace
+        cleaned_text = re.sub(r'\n\s*\n\s*\n', '\n\n', cleaned_text)  # Remove excessive newlines
+        cleaned_text = cleaned_text.strip()
+        
+        return cleaned_text
+
 
 
 class AIResponseHandler:
@@ -153,11 +340,35 @@ class AIResponseHandler:
         """Update client with new configuration"""
         self._initialize_client()
     
+    async def fetch_available_models(self) -> list:
+        """Fetch available models from the API"""
+        if not self.client:
+            return []
+        
+        try:
+            models_response = await asyncio.to_thread(
+                self.client.models.list
+            )
+            models = [model.id for model in models_response.data]
+            
+            # Cache the models in config
+            if "openai" not in self.config_manager.config:
+                self.config_manager.config["openai"] = {}
+            self.config_manager.config["openai"]["available_models"] = models
+            self.config_manager.save_config()
+            
+            return models
+        except Exception as e:
+            print(f"Error fetching models: {str(e)}")
+            return []
+    
     async def get_ai_response(
         self, 
         message: str, 
         character_name: Optional[str] = None,
-        model: str = "gpt-3.5-turbo"
+        model: Optional[str] = None,
+        preset_override: Optional[Dict[str, Any]] = None,
+        additional_context: Optional[list] = None
     ) -> str:
         """
         Get AI response for a message
@@ -165,7 +376,9 @@ class AIResponseHandler:
         Args:
             message: The user message
             character_name: Name of the character to use
-            model: The model to use for generation
+            model: The model to use for generation (if None, uses selected model from config)
+            preset_override: Override preset configuration
+            additional_context: Additional message history context
             
         Returns:
             AI generated response
@@ -173,26 +386,73 @@ class AIResponseHandler:
         if not self.client:
             return "Error: OpenAI API not configured. Please set BASE URL and API KEY."
         
-        # Get character description as system prompt
-        characters = self.config_manager.get_characters()
-        system_prompt = "You are a helpful assistant."
+        # Use selected model from config if not specified
+        if model is None:
+            model = self.config_manager.get_selected_model()
         
+        # Get active preset or use override
+        preset = preset_override or self.config_manager.get_active_preset()
+        
+        # Build messages array
+        messages = []
+        
+        # Add preset blocks if available
+        if preset:
+            blocks = preset.get("blocks", [])
+            for block in blocks:
+                if block.get("active", True):
+                    role = block.get("role", "system")
+                    content = block.get("content", "")
+                    if content:
+                        messages.append({"role": role, "content": content})
+        
+        # Get character description as system prompt
+        system_prompt = "You are a helpful assistant."
         if character_name:
             char = self.config_manager.get_character_by_name(character_name)
             if char:
                 # Use description field as system prompt, fallback to system_prompt for backward compatibility
                 system_prompt = char.get("description") or char.get("system_prompt", "You are a helpful assistant.")
         
+        # Add character system prompt if no preset or if preset doesn't have system messages
+        if not preset or not any(msg.get("role") == "system" for msg in messages):
+            messages.insert(0, {"role": "system", "content": system_prompt})
+        
+        # Add additional context (chat history)
+        if additional_context:
+            messages.extend(additional_context)
+        
+        # Add current user message
+        messages.append({"role": "user", "content": message})
+        
+        # Get AI configuration from preset or use defaults
+        ai_config = {}
+        if preset:
+            config = preset.get("ai_config", {})
+            if config.get("max_tokens"):
+                ai_config["max_tokens"] = min(config.get("max_tokens", 4096), 2000000)
+            if config.get("temperature") is not None:
+                ai_config["temperature"] = config.get("temperature", 1.0)
+            if config.get("top_p") is not None:
+                ai_config["top_p"] = config.get("top_p", 1.0)
+            if config.get("presence_penalty") is not None and config.get("use_presence_penalty", False):
+                ai_config["presence_penalty"] = config.get("presence_penalty", 0.0)
+            if config.get("frequency_penalty") is not None and config.get("use_frequency_penalty", False):
+                ai_config["frequency_penalty"] = config.get("frequency_penalty", 0.0)
+        
         try:
             response = await asyncio.to_thread(
                 self.client.chat.completions.create,
                 model=model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": message}
-                ]
+                messages=messages,
+                **ai_config
             )
-            return response.choices[0].message.content
+            response_text = response.choices[0].message.content
+            
+            # Remove thinking tags if enabled
+            response_text = self.config_manager.remove_thinking_tags(response_text)
+            
+            return response_text
         except Exception as e:
             return f"Error getting AI response: {str(e)}"
 
@@ -210,6 +470,9 @@ class PresetBot(commands.Bot):
         
         # Add commands
         self.add_commands()
+        
+        # Add event handlers
+        self.add_event_handlers()
     
     def add_commands(self) -> None:
         """Add bot commands"""
@@ -302,6 +565,87 @@ class PresetBot(commands.Bot):
                 response = await self.ai_handler.get_ai_response(full_message)
             
             await ctx.send(response)
+        
+        @self.command(name='chat')
+        async def chat(ctx, user_character: Optional[str] = None, *, message: str):
+            """
+            Chat using a user character - messages are tracked per channel
+            Usage: !chat [user_character_name]: "dialogue" action description
+            Example: !chat Alice: "Hello there!" waves enthusiastically
+            """
+            # Parse the message to extract dialogue and actions
+            # Format: !chat CharacterName: "What is being said" What is being Done
+            
+            # Get user character if specified
+            user_char = None
+            if user_character:
+                user_char = self.config_manager.get_user_character_by_name(user_character)
+            
+            # Build the chat message
+            channel_id = str(ctx.channel.id)
+            
+            # Get channel chat history
+            chat_history = self.config_manager.get_chat_history(channel_id)
+            
+            # Store this message in history
+            message_data = {
+                "author": str(ctx.author.id),
+                "author_name": str(ctx.author.name),
+                "user_character": user_character,
+                "content": message,
+                "type": "user",
+                "timestamp": ctx.message.created_at.isoformat()
+            }
+            self.config_manager.add_chat_message(channel_id, message_data)
+            
+            # Build context from recent history (last 20 messages)
+            context_messages = []
+            for msg in chat_history[-20:]:
+                if msg.get("type") == "user":
+                    char_prefix = f"[{msg.get('user_character', msg.get('author_name'))}] " if msg.get('user_character') else f"[{msg.get('author_name')}] "
+                    context_messages.append({
+                        "role": "user",
+                        "content": char_prefix + msg.get("content", "")
+                    })
+                elif msg.get("type") == "assistant":
+                    context_messages.append({
+                        "role": "assistant",
+                        "content": msg.get("content", "")
+                    })
+            
+            # Get AI response with context
+            ai_character = self.config_manager.get_characters()[0].get("name") if self.config_manager.get_characters() else None
+            response = await self.ai_handler.get_ai_response(
+                message,
+                character_name=ai_character,
+                additional_context=context_messages
+            )
+            
+            # Store AI response in history
+            response_data = {
+                "content": response,
+                "type": "assistant",
+                "timestamp": ctx.message.created_at.isoformat()
+            }
+            self.config_manager.add_chat_message(channel_id, response_data)
+            
+            # Send response via webhook if character is configured
+            if ai_character:
+                char = self.config_manager.get_character_by_name(ai_character)
+                if char:
+                    await self.send_via_webhook(ctx.channel, response, char)
+                    return
+            
+            # Otherwise send normally
+            await ctx.send(response)
+        
+        @self.command(name='clearchat')
+        @commands.has_permissions(administrator=True)
+        async def clear_chat(ctx):
+            """Clear chat history for this channel (Admin only)"""
+            channel_id = str(ctx.channel.id)
+            self.config_manager.clear_chat_history(channel_id)
+            await ctx.send("Chat history cleared for this channel.")
     
     async def send_via_webhook(self, channel, content: str, character: Dict[str, Any]) -> None:
         """
@@ -354,6 +698,21 @@ class PresetBot(commands.Bot):
         """Called when bot is ready"""
         print(f'{self.user} has connected to Discord!')
         print(f'Bot is in {len(self.guilds)} guilds')
+    
+    def add_event_handlers(self):
+        """Add event handlers for message tracking"""
+        
+        @self.event
+        async def on_message(message):
+            # Don't process bot's own messages
+            if message.author == self.user:
+                return
+            
+            # Process commands first
+            await self.process_commands(message)
+            
+            # Track !chat messages automatically (already handled in command)
+            # But we can also track webhook messages from the bot here if needed
 
 
 def main():

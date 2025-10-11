@@ -4,7 +4,13 @@
   },
   "openai": {
     "base_url": "https://api.openai.com/v1",
-    "api_key": ""
+    "api_key": "",
+    "model": "gpt-3.5-turbo"
+  },
+  "thinking_tags": {
+    "enabled": false,
+    "start_tag": "<think>",
+    "end_tag": "</think>"
   },
   "characters": [
     {
@@ -14,5 +20,13 @@
       "avatar_url": "",
       "avatar_file": ""
     }
-  ]
+  ],
+  "user_characters": [],
+  "presets": [],
+  "active_preset": null,
+  "chat_history": {},
+  "last_manual_send": {
+    "server_id": "",
+    "channel_id": ""
+  }
 }
