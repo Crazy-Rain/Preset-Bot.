@@ -173,8 +173,8 @@ class PresetBotGUI:
     def create_characters_tab(self):
         """Create characters management tab"""
         
-        # Add Character
-        add_frame = ttk.LabelFrame(self.characters_frame, text="Add New Character", padding=10)
+        # Add/Edit Character
+        add_frame = ttk.LabelFrame(self.characters_frame, text="Add/Edit Character", padding=10)
         add_frame.pack(fill=tk.X, padx=10, pady=10)
         
         # Character Name (ID)
@@ -191,13 +191,19 @@ class PresetBotGUI:
         
         # Description
         ttk.Label(add_frame, text="Description:").grid(row=2, column=0, sticky=tk.NW, pady=5)
-        self.char_description_text = scrolledtext.ScrolledText(add_frame, height=5, width=50)
+        self.char_description_text = scrolledtext.ScrolledText(add_frame, height=4, width=50)
         self.char_description_text.grid(row=2, column=1, columnspan=2, pady=5, padx=5, sticky=tk.W)
         ttk.Label(add_frame, text="(AI system prompt)", font=('TkDefaultFont', 8, 'italic')).grid(row=3, column=1, sticky=tk.W, padx=5)
         
+        # Scenario
+        ttk.Label(add_frame, text="Scenario:").grid(row=4, column=0, sticky=tk.NW, pady=5)
+        self.char_scenario_text = scrolledtext.ScrolledText(add_frame, height=3, width=50)
+        self.char_scenario_text.grid(row=4, column=1, columnspan=2, pady=5, padx=5, sticky=tk.W)
+        ttk.Label(add_frame, text="(Default situation/scenario for this character)", font=('TkDefaultFont', 8, 'italic')).grid(row=5, column=1, sticky=tk.W, padx=5)
+        
         # Avatar selection
         avatar_frame = ttk.LabelFrame(add_frame, text="Avatar/Icon", padding=5)
-        avatar_frame.grid(row=4, column=0, columnspan=3, sticky=tk.EW, pady=10, padx=5)
+        avatar_frame.grid(row=6, column=0, columnspan=3, sticky=tk.EW, pady=10, padx=5)
         
         # Avatar URL option
         ttk.Label(avatar_frame, text="Avatar URL:").grid(row=0, column=0, sticky=tk.W, pady=5)
@@ -214,7 +220,15 @@ class PresetBotGUI:
         self.char_avatar_file_entry.grid(row=2, column=1, pady=5, padx=5, sticky=tk.W)
         ttk.Button(avatar_frame, text="Browse...", command=self.browse_avatar_file).grid(row=2, column=2, pady=5, padx=5)
         
-        ttk.Button(add_frame, text="Add Character", command=self.add_character).grid(row=5, column=1, pady=10)
+        # Action buttons
+        button_frame = ttk.Frame(add_frame)
+        button_frame.grid(row=7, column=1, pady=10)
+        ttk.Button(button_frame, text="Add Character", command=self.add_character).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Update Selected", command=self.update_character).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Clear Form", command=self.clear_character_form).pack(side=tk.LEFT, padx=5)
+        
+        # Store editing index
+        self.char_editing_index = None
         
         # List Characters
         list_frame = ttk.LabelFrame(self.characters_frame, text="Current Characters", padding=10)
@@ -233,6 +247,7 @@ class PresetBotGUI:
         button_frame.pack(fill=tk.X, pady=5)
         
         ttk.Button(button_frame, text="Refresh List", command=self.refresh_characters_list).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Edit Selected", command=self.edit_character).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="Delete Selected", command=self.delete_character).pack(side=tk.LEFT, padx=5)
         
         self.refresh_characters_list()
@@ -286,6 +301,38 @@ class PresetBotGUI:
         self.thinking_end_tag_entry.delete(0, tk.END)
         self.thinking_end_tag_entry.insert(0, thinking_config.get("end_tag", "</think>"))
         
+        # AI Configuration Options
+        try:
+            ai_config = self.config_manager.get_ai_config_options()
+            self.preset_max_tokens.delete(0, tk.END)
+            self.preset_max_tokens.insert(0, str(ai_config.get("max_tokens", 4096)))
+            
+            self.preset_response_length.delete(0, tk.END)
+            self.preset_response_length.insert(0, str(ai_config.get("response_length", 1024)))
+            
+            self.preset_temperature.delete(0, tk.END)
+            self.preset_temperature.insert(0, str(ai_config.get("temperature", 1.0)))
+            
+            self.preset_top_p.delete(0, tk.END)
+            self.preset_top_p.insert(0, str(ai_config.get("top_p", 1.0)))
+            
+            self.preset_reasoning_var.set(ai_config.get("reasoning_enabled", False))
+            
+            reasoning_level = ai_config.get("reasoning_level", "Auto")
+            if reasoning_level in ['Auto', 'Maximum', 'High', 'Medium', 'Low', 'Minimum']:
+                self.preset_reasoning_level.set(reasoning_level)
+            
+            self.preset_use_presence_penalty.set(ai_config.get("use_presence_penalty", False))
+            self.preset_presence_penalty.delete(0, tk.END)
+            self.preset_presence_penalty.insert(0, str(ai_config.get("presence_penalty", 0.0)))
+            
+            self.preset_use_frequency_penalty.set(ai_config.get("use_frequency_penalty", False))
+            self.preset_frequency_penalty.delete(0, tk.END)
+            self.preset_frequency_penalty.insert(0, str(ai_config.get("frequency_penalty", 0.0)))
+        except (AttributeError, KeyError):
+            # If AI config fields don't exist, skip loading them
+            pass
+        
         self.config_status_label.config(text="Configuration loaded", foreground="green")
     
     def save_config(self):
@@ -313,6 +360,25 @@ class PresetBotGUI:
             thinking_start_tag = self.thinking_start_tag_entry.get()
             thinking_end_tag = self.thinking_end_tag_entry.get()
             self.config_manager.set_thinking_tags_config(thinking_enabled, thinking_start_tag, thinking_end_tag)
+            
+            # Save AI configuration options
+            try:
+                ai_config_options = {
+                    "max_tokens": int(self.preset_max_tokens.get()),
+                    "response_length": int(self.preset_response_length.get()),
+                    "temperature": float(self.preset_temperature.get()),
+                    "top_p": float(self.preset_top_p.get()),
+                    "reasoning_enabled": self.preset_reasoning_var.get(),
+                    "reasoning_level": self.preset_reasoning_level.get(),
+                    "use_presence_penalty": self.preset_use_presence_penalty.get(),
+                    "presence_penalty": float(self.preset_presence_penalty.get()),
+                    "use_frequency_penalty": self.preset_use_frequency_penalty.get(),
+                    "frequency_penalty": float(self.preset_frequency_penalty.get())
+                }
+                self.config_manager.set_ai_config_options(ai_config_options)
+            except (ValueError, AttributeError):
+                # If AI config fields don't exist or have invalid values, skip saving them
+                pass
             
             self.config_status_label.config(text="Configuration saved successfully!", foreground="green")
             messagebox.showinfo("Success", "Configuration saved successfully!")
@@ -516,6 +582,7 @@ class PresetBotGUI:
         name = self.char_name_entry.get().strip().lower().replace(" ", "_")
         display_name = self.char_display_name_entry.get().strip()
         description = self.char_description_text.get("1.0", tk.END).strip()
+        scenario = self.char_scenario_text.get("1.0", tk.END).strip()
         avatar_url = self.char_avatar_url_entry.get().strip()
         avatar_file_source = self.char_avatar_file_var.get().strip()
         
@@ -537,20 +604,107 @@ class PresetBotGUI:
                 shutil.copy2(avatar_file_source, avatar_file_dest)
             
             # Add character to config
-            self.config_manager.add_character(name, display_name, description, avatar_url, avatar_file_dest)
+            self.config_manager.add_character(name, display_name, description, avatar_url, avatar_file_dest, scenario)
             
             # Clear form
-            self.char_name_entry.delete(0, tk.END)
-            self.char_display_name_entry.delete(0, tk.END)
-            self.char_description_text.delete("1.0", tk.END)
-            self.char_avatar_url_entry.delete(0, tk.END)
-            self.char_avatar_file_var.set("")
+            self.clear_character_form()
             
             self.refresh_characters_list()
             self.update_character_dropdown()
             messagebox.showinfo("Success", f"Character '{display_name}' added successfully!")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to add character: {str(e)}")
+    
+    def update_character(self):
+        """Update selected character"""
+        if self.char_editing_index is None:
+            messagebox.showwarning("Warning", "Please select a character to edit first using 'Edit Selected' button")
+            return
+        
+        name = self.char_name_entry.get().strip().lower().replace(" ", "_")
+        display_name = self.char_display_name_entry.get().strip()
+        description = self.char_description_text.get("1.0", tk.END).strip()
+        scenario = self.char_scenario_text.get("1.0", tk.END).strip()
+        avatar_url = self.char_avatar_url_entry.get().strip()
+        avatar_file_source = self.char_avatar_file_var.get().strip()
+        
+        if not name or not display_name or not description:
+            messagebox.showerror("Error", "Please enter character name, display name, and description")
+            return
+        
+        try:
+            # Handle avatar file if provided
+            characters = self.config_manager.get_characters()
+            current_avatar_file = characters[self.char_editing_index].get("avatar_file", "")
+            avatar_file_dest = current_avatar_file
+            
+            if avatar_file_source and os.path.exists(avatar_file_source) and avatar_file_source != current_avatar_file:
+                # Create avatars directory if it doesn't exist
+                avatars_dir = "character_avatars"
+                os.makedirs(avatars_dir, exist_ok=True)
+                
+                # Copy file to avatars directory with character name
+                file_ext = os.path.splitext(avatar_file_source)[1]
+                avatar_file_dest = os.path.join(avatars_dir, f"{name}{file_ext}")
+                shutil.copy2(avatar_file_source, avatar_file_dest)
+            
+            # Update character in config
+            self.config_manager.update_character(self.char_editing_index, name, display_name, description, avatar_url, avatar_file_dest, scenario)
+            
+            # Clear form and editing state
+            self.clear_character_form()
+            self.char_editing_index = None
+            
+            self.refresh_characters_list()
+            self.update_character_dropdown()
+            messagebox.showinfo("Success", f"Character '{display_name}' updated successfully!")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to update character: {str(e)}")
+    
+    def edit_character(self):
+        """Load selected character into form for editing"""
+        selection = self.characters_listbox.curselection()
+        if not selection:
+            messagebox.showwarning("Warning", "Please select a character to edit")
+            return
+        
+        index = selection[0]
+        characters = self.config_manager.get_characters()
+        if 0 <= index < len(characters):
+            char = characters[index]
+            
+            # Load character data into form
+            self.char_name_entry.delete(0, tk.END)
+            self.char_name_entry.insert(0, char.get("name", ""))
+            
+            self.char_display_name_entry.delete(0, tk.END)
+            self.char_display_name_entry.insert(0, char.get("display_name", ""))
+            
+            self.char_description_text.delete("1.0", tk.END)
+            self.char_description_text.insert("1.0", char.get("description", ""))
+            
+            self.char_scenario_text.delete("1.0", tk.END)
+            self.char_scenario_text.insert("1.0", char.get("scenario", ""))
+            
+            self.char_avatar_url_entry.delete(0, tk.END)
+            self.char_avatar_url_entry.insert(0, char.get("avatar_url", ""))
+            
+            self.char_avatar_file_var.set(char.get("avatar_file", ""))
+            
+            # Set editing index
+            self.char_editing_index = index
+            
+            messagebox.showinfo("Edit Mode", f"Editing character '{char.get('display_name', char.get('name'))}'. Click 'Update Selected' to save changes.")
+    
+    def clear_character_form(self):
+        """Clear the character form"""
+        self.char_name_entry.delete(0, tk.END)
+        self.char_display_name_entry.delete(0, tk.END)
+        self.char_description_text.delete("1.0", tk.END)
+        self.char_scenario_text.delete("1.0", tk.END)
+        self.char_avatar_url_entry.delete(0, tk.END)
+        self.char_avatar_file_var.set("")
+        self.char_editing_index = None
     
     def delete_character(self):
         """Delete selected character"""
@@ -896,8 +1050,8 @@ class PresetBotGUI:
     def create_user_characters_tab(self):
         """Create user characters management tab (similar to Characters tab)"""
         
-        # Add User Character
-        add_frame = ttk.LabelFrame(self.user_characters_frame, text="Add New User Character", padding=10)
+        # Add/Edit User Character
+        add_frame = ttk.LabelFrame(self.user_characters_frame, text="Add/Edit User Character", padding=10)
         add_frame.pack(fill=tk.X, padx=10, pady=10)
         
         # Character Name (ID)
@@ -937,7 +1091,15 @@ class PresetBotGUI:
         self.user_char_avatar_file_entry.grid(row=2, column=1, pady=5, padx=5, sticky=tk.W)
         ttk.Button(avatar_frame, text="Browse...", command=self.browse_user_char_avatar_file).grid(row=2, column=2, pady=5, padx=5)
         
-        ttk.Button(add_frame, text="Add User Character", command=self.add_user_character).grid(row=5, column=1, pady=10)
+        # Action buttons
+        button_frame = ttk.Frame(add_frame)
+        button_frame.grid(row=5, column=1, pady=10)
+        ttk.Button(button_frame, text="Add User Character", command=self.add_user_character).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Update Selected", command=self.update_user_character).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Clear Form", command=self.clear_user_character_form).pack(side=tk.LEFT, padx=5)
+        
+        # Store editing index
+        self.user_char_editing_index = None
         
         # List User Characters
         list_frame = ttk.LabelFrame(self.user_characters_frame, text="Current User Characters", padding=10)
@@ -956,6 +1118,7 @@ class PresetBotGUI:
         button_frame.pack(fill=tk.X, pady=5)
         
         ttk.Button(button_frame, text="Refresh List", command=self.refresh_user_characters_list).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Edit Selected", command=self.edit_user_character).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="Delete Selected", command=self.delete_user_character).pack(side=tk.LEFT, padx=5)
         
         self.refresh_user_characters_list()
@@ -1001,16 +1164,97 @@ class PresetBotGUI:
             self.config_manager.add_user_character(name, display_name, description, avatar_url, avatar_file_dest)
             
             # Clear form
-            self.user_char_name_entry.delete(0, tk.END)
-            self.user_char_display_name_entry.delete(0, tk.END)
-            self.user_char_description_text.delete("1.0", tk.END)
-            self.user_char_avatar_url_entry.delete(0, tk.END)
-            self.user_char_avatar_file_var.set("")
+            self.clear_user_character_form()
             
             self.refresh_user_characters_list()
             messagebox.showinfo("Success", f"User character '{display_name}' added successfully!")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to add user character: {str(e)}")
+    
+    def update_user_character(self):
+        """Update selected user character"""
+        if self.user_char_editing_index is None:
+            messagebox.showwarning("Warning", "Please select a user character to edit first using 'Edit Selected' button")
+            return
+        
+        name = self.user_char_name_entry.get().strip().lower().replace(" ", "_")
+        display_name = self.user_char_display_name_entry.get().strip()
+        description = self.user_char_description_text.get("1.0", tk.END).strip()
+        avatar_url = self.user_char_avatar_url_entry.get().strip()
+        avatar_file_source = self.user_char_avatar_file_var.get().strip()
+        
+        if not name or not display_name:
+            messagebox.showerror("Error", "Please enter character name and display name")
+            return
+        
+        try:
+            # Handle avatar file if provided
+            characters = self.config_manager.get_user_characters()
+            current_avatar_file = characters[self.user_char_editing_index].get("avatar_file", "")
+            avatar_file_dest = current_avatar_file
+            
+            if avatar_file_source and os.path.exists(avatar_file_source) and avatar_file_source != current_avatar_file:
+                # Create avatars directory if it doesn't exist
+                avatars_dir = "character_avatars"
+                os.makedirs(avatars_dir, exist_ok=True)
+                
+                # Copy file to avatars directory with character name
+                file_ext = os.path.splitext(avatar_file_source)[1]
+                avatar_file_dest = os.path.join(avatars_dir, f"user_{name}{file_ext}")
+                shutil.copy2(avatar_file_source, avatar_file_dest)
+            
+            # Update character in config
+            self.config_manager.update_user_character(self.user_char_editing_index, name, display_name, description, avatar_url, avatar_file_dest)
+            
+            # Clear form and editing state
+            self.clear_user_character_form()
+            self.user_char_editing_index = None
+            
+            self.refresh_user_characters_list()
+            messagebox.showinfo("Success", f"User character '{display_name}' updated successfully!")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to update user character: {str(e)}")
+    
+    def edit_user_character(self):
+        """Load selected user character into form for editing"""
+        selection = self.user_characters_listbox.curselection()
+        if not selection:
+            messagebox.showwarning("Warning", "Please select a user character to edit")
+            return
+        
+        index = selection[0]
+        characters = self.config_manager.get_user_characters()
+        if 0 <= index < len(characters):
+            char = characters[index]
+            
+            # Load character data into form
+            self.user_char_name_entry.delete(0, tk.END)
+            self.user_char_name_entry.insert(0, char.get("name", ""))
+            
+            self.user_char_display_name_entry.delete(0, tk.END)
+            self.user_char_display_name_entry.insert(0, char.get("display_name", ""))
+            
+            self.user_char_description_text.delete("1.0", tk.END)
+            self.user_char_description_text.insert("1.0", char.get("description", ""))
+            
+            self.user_char_avatar_url_entry.delete(0, tk.END)
+            self.user_char_avatar_url_entry.insert(0, char.get("avatar_url", ""))
+            
+            self.user_char_avatar_file_var.set(char.get("avatar_file", ""))
+            
+            # Set editing index
+            self.user_char_editing_index = index
+            
+            messagebox.showinfo("Edit Mode", f"Editing user character '{char.get('display_name', char.get('name'))}'. Click 'Update Selected' to save changes.")
+    
+    def clear_user_character_form(self):
+        """Clear the user character form"""
+        self.user_char_name_entry.delete(0, tk.END)
+        self.user_char_display_name_entry.delete(0, tk.END)
+        self.user_char_description_text.delete("1.0", tk.END)
+        self.user_char_avatar_url_entry.delete(0, tk.END)
+        self.user_char_avatar_file_var.set("")
+        self.user_char_editing_index = None
     
     def delete_user_character(self):
         """Delete selected user character"""

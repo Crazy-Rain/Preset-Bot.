@@ -5,6 +5,7 @@ Preset Discord Bot - Stable AI Response and Manual Send Features
 import json
 import os
 import asyncio
+import aiohttp
 from typing import Optional, Dict, Any
 import discord
 from discord.ext import commands
@@ -49,11 +50,24 @@ class ConfigManager:
                 "start_tag": "<think>",
                 "end_tag": "</think>"
             },
+            "ai_config_options": {
+                "max_tokens": 4096,
+                "response_length": 1024,
+                "temperature": 1.0,
+                "top_p": 1.0,
+                "reasoning_enabled": False,
+                "reasoning_level": "Auto",
+                "use_presence_penalty": False,
+                "presence_penalty": 0.0,
+                "use_frequency_penalty": False,
+                "frequency_penalty": 0.0
+            },
             "characters": [
                 {
                     "name": "assistant",
                     "display_name": "Assistant",
                     "description": "You are a helpful assistant.",
+                    "scenario": "",
                     "avatar_url": "",
                     "avatar_file": ""
                 }
@@ -62,6 +76,7 @@ class ConfigManager:
             "presets": [],
             "active_preset": None,
             "chat_history": {},
+            "channel_characters": {},
             "last_manual_send": {
                 "server_id": "",
                 "channel_id": ""
@@ -103,7 +118,7 @@ class ConfigManager:
         return self.config.get("characters", [])
     
     def add_character(self, name: str, display_name: str, description: str, 
-                     avatar_url: str = "", avatar_file: str = "") -> None:
+                     avatar_url: str = "", avatar_file: str = "", scenario: str = "") -> None:
         """Add a new character"""
         if "characters" not in self.config:
             self.config["characters"] = []
@@ -111,19 +126,21 @@ class ConfigManager:
             "name": name,
             "display_name": display_name,
             "description": description,
+            "scenario": scenario,
             "avatar_url": avatar_url,
             "avatar_file": avatar_file
         })
         self.save_config()
     
     def update_character(self, index: int, name: str, display_name: str, 
-                        description: str, avatar_url: str = "", avatar_file: str = "") -> None:
+                        description: str, avatar_url: str = "", avatar_file: str = "", scenario: str = "") -> None:
         """Update an existing character"""
         if "characters" in self.config and 0 <= index < len(self.config["characters"]):
             self.config["characters"][index] = {
                 "name": name,
                 "display_name": display_name,
                 "description": description,
+                "scenario": scenario,
                 "avatar_url": avatar_url,
                 "avatar_file": avatar_file
             }
@@ -160,6 +177,19 @@ class ConfigManager:
             "avatar_file": avatar_file
         })
         self.save_config()
+    
+    def update_user_character(self, index: int, name: str, display_name: str,
+                             description: str, avatar_url: str = "", avatar_file: str = "") -> None:
+        """Update an existing user character"""
+        if "user_characters" in self.config and 0 <= index < len(self.config["user_characters"]):
+            self.config["user_characters"][index] = {
+                "name": name,
+                "display_name": display_name,
+                "description": description,
+                "avatar_url": avatar_url,
+                "avatar_file": avatar_file
+            }
+            self.save_config()
     
     def delete_user_character(self, index: int) -> None:
         """Delete a user character"""
@@ -242,6 +272,28 @@ class ConfigManager:
                 self.config["chat_history"][channel_key] = []
                 self.save_config()
     
+    # Channel Character Management
+    def get_channel_character(self, channel_id: str) -> Optional[str]:
+        """Get the active character for a channel"""
+        if "channel_characters" not in self.config:
+            self.config["channel_characters"] = {}
+        return self.config["channel_characters"].get(str(channel_id))
+    
+    def set_channel_character(self, channel_id: str, character_name: str) -> None:
+        """Set the active character for a channel"""
+        if "channel_characters" not in self.config:
+            self.config["channel_characters"] = {}
+        self.config["channel_characters"][str(channel_id)] = character_name
+        self.save_config()
+    
+    def clear_channel_character(self, channel_id: str) -> None:
+        """Clear the active character for a channel"""
+        if "channel_characters" in self.config:
+            channel_key = str(channel_id)
+            if channel_key in self.config["channel_characters"]:
+                del self.config["channel_characters"][channel_key]
+                self.save_config()
+    
     # Last Manual Send Target Management
     def get_last_manual_send_target(self) -> Dict[str, str]:
         """Get last used server and channel IDs for manual send"""
@@ -287,6 +339,27 @@ class ConfigManager:
         self.config["thinking_tags"]["enabled"] = enabled
         self.config["thinking_tags"]["start_tag"] = start_tag
         self.config["thinking_tags"]["end_tag"] = end_tag
+        self.save_config()
+    
+    # AI Configuration Options Management
+    def get_ai_config_options(self) -> Dict[str, Any]:
+        """Get AI configuration options"""
+        return self.config.get("ai_config_options", {
+            "max_tokens": 4096,
+            "response_length": 1024,
+            "temperature": 1.0,
+            "top_p": 1.0,
+            "reasoning_enabled": False,
+            "reasoning_level": "Auto",
+            "use_presence_penalty": False,
+            "presence_penalty": 0.0,
+            "use_frequency_penalty": False,
+            "frequency_penalty": 0.0
+        })
+    
+    def set_ai_config_options(self, options: Dict[str, Any]) -> None:
+        """Set AI configuration options"""
+        self.config["ai_config_options"] = options
         self.save_config()
     
     def remove_thinking_tags(self, text: str) -> str:
@@ -578,8 +651,14 @@ class PresetBot(commands.Bot):
             
             # Get user character if specified
             user_char = None
+            user_char_info = ""
             if user_character:
                 user_char = self.config_manager.get_user_character_by_name(user_character)
+                if user_char:
+                    # Build persona information from user character
+                    user_char_info = f"\n\nUser is playing as {user_char.get('display_name', user_character)}."
+                    if user_char.get('description'):
+                        user_char_info += f"\nCharacter description: {user_char.get('description')}"
             
             # Build the chat message
             channel_id = str(ctx.channel.id)
@@ -614,9 +693,19 @@ class PresetBot(commands.Bot):
                     })
             
             # Get AI response with context
-            ai_character = self.config_manager.get_characters()[0].get("name") if self.config_manager.get_characters() else None
+            # Use channel-specific character if set, otherwise use first character
+            channel_id = str(ctx.channel.id)
+            ai_character = self.config_manager.get_channel_character(channel_id)
+            if not ai_character and self.config_manager.get_characters():
+                ai_character = self.config_manager.get_characters()[0].get("name")
+            
+            # Add user character info to the message if present
+            full_message = message
+            if user_char_info:
+                full_message = message + user_char_info
+            
             response = await self.ai_handler.get_ai_response(
-                message,
+                full_message,
                 character_name=ai_character,
                 additional_context=context_messages
             )
@@ -646,6 +735,109 @@ class PresetBot(commands.Bot):
             channel_id = str(ctx.channel.id)
             self.config_manager.clear_chat_history(channel_id)
             await ctx.send("Chat history cleared for this channel.")
+        
+        @self.command(name='character')
+        async def set_character(ctx, character_name: Optional[str] = None):
+            """
+            Set which character the bot responds as in this channel
+            Usage: !character <character_name>
+            Usage: !character (with no name to clear)
+            Example: !character dashie
+            """
+            channel_id = str(ctx.channel.id)
+            
+            if not character_name:
+                # Clear the channel character
+                self.config_manager.clear_channel_character(channel_id)
+                await ctx.send("Channel character cleared. Bot will use default character.")
+                return
+            
+            # Check if character exists
+            char = self.config_manager.get_character_by_name(character_name)
+            if not char:
+                await ctx.send(f"Error: Character '{character_name}' not found. Use !characters to see available characters.")
+                return
+            
+            # Set the channel character
+            self.config_manager.set_channel_character(channel_id, character_name)
+            await ctx.send(f"✓ Channel character set to '{char.get('display_name', character_name)}'. All responses in this channel will use this character.")
+        
+        @self.command(name='image')
+        async def image(ctx, character_name: str, url: Optional[str] = None):
+            """
+            Update character avatar image
+            Usage: !image <character_name> <url>
+            Or: !image <character_name> (with attached image)
+            Example: !image dashie https://example.com/avatar.png
+            """
+            try:
+                # Get character
+                char = self.config_manager.get_character_by_name(character_name)
+                if not char:
+                    await ctx.send(f"Error: Character '{character_name}' not found.")
+                    return
+                
+                # Get character index
+                characters = self.config_manager.get_characters()
+                char_index = None
+                for i, c in enumerate(characters):
+                    if c.get("name", "").lower() == character_name.lower():
+                        char_index = i
+                        break
+                
+                if char_index is None:
+                    await ctx.send(f"Error: Could not find character index for '{character_name}'.")
+                    return
+                
+                # Check for attached image
+                image_url = url
+                if not image_url and ctx.message.attachments:
+                    # Use first attachment
+                    image_url = ctx.message.attachments[0].url
+                
+                if not image_url:
+                    await ctx.send("Error: Please provide either a URL or attach an image to the message.")
+                    return
+                
+                await ctx.send(f"Downloading image for '{character_name}'...")
+                
+                # Download the image
+                avatars_dir = "character_avatars"
+                os.makedirs(avatars_dir, exist_ok=True)
+                
+                # Determine file extension from URL
+                file_ext = ".png"  # default
+                if "." in image_url:
+                    url_ext = image_url.split(".")[-1].split("?")[0].lower()
+                    if url_ext in ["png", "jpg", "jpeg", "gif", "webp"]:
+                        file_ext = f".{url_ext}"
+                
+                avatar_file = os.path.join(avatars_dir, f"{character_name}{file_ext}")
+                
+                # Download image
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(image_url) as resp:
+                        if resp.status == 200:
+                            with open(avatar_file, 'wb') as f:
+                                f.write(await resp.read())
+                        else:
+                            await ctx.send(f"Error: Failed to download image (HTTP {resp.status}).")
+                            return
+                
+                # Update character with new avatar file
+                self.config_manager.update_character(
+                    index=char_index,
+                    name=char.get("name"),
+                    display_name=char.get("display_name"),
+                    description=char.get("description", ""),
+                    scenario=char.get("scenario", ""),
+                    avatar_url=image_url,
+                    avatar_file=avatar_file
+                )
+                
+                await ctx.send(f"✓ Avatar updated for character '{char.get('display_name', character_name)}'!")
+            except Exception as e:
+                await ctx.send(f"Error updating avatar: {str(e)}")
     
     async def send_via_webhook(self, channel, content: str, character: Dict[str, Any]) -> None:
         """
