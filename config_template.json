@@ -12,6 +12,7 @@
     "start_tag": "<think>",
     "end_tag": "</think>"
   },
+  "chat_history_limit": 20,
   "ai_config_options": {
     "max_tokens": 4096,
     "response_length": 1024,

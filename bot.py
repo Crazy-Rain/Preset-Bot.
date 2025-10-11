@@ -342,6 +342,15 @@ class ConfigManager:
         self.config["thinking_tags"]["end_tag"] = end_tag
         self.save_config()
     
+    def get_chat_history_limit(self) -> int:
+        """Get chat history message limit for context"""
+        return self.config.get("chat_history_limit", 20)
+    
+    def set_chat_history_limit(self, limit: int) -> None:
+        """Set chat history message limit for context"""
+        self.config["chat_history_limit"] = max(1, int(limit))  # Ensure at least 1
+        self.save_config()
+    
     # AI Configuration Options Management
     def get_ai_config_options(self) -> Dict[str, Any]:
         """Get AI configuration options"""
@@ -594,7 +603,8 @@ class AIResponseHandler:
         character_name: Optional[str] = None,
         model: Optional[str] = None,
         preset_override: Optional[Dict[str, Any]] = None,
-        additional_context: Optional[list] = None
+        additional_context: Optional[list] = None,
+        user_character_info: Optional[str] = None
     ) -> str:
         """
         Get AI response for a message
@@ -605,6 +615,7 @@ class AIResponseHandler:
             model: The model to use for generation (if None, uses selected model from config)
             preset_override: Override preset configuration
             additional_context: Additional message history context
+            user_character_info: User character description to add to system prompt
             
         Returns:
             AI generated response
@@ -639,6 +650,10 @@ class AIResponseHandler:
             if char:
                 # Use description field as system prompt, fallback to system_prompt for backward compatibility
                 system_prompt = char.get("description") or char.get("system_prompt", "You are a helpful assistant.")
+        
+        # Add user character info to system prompt if provided
+        if user_character_info:
+            system_prompt += user_character_info
         
         # Add character system prompt if no preset or if preset doesn't have system messages
         if not preset or not any(msg.get("role") == "system" for msg in messages):
@@ -809,19 +824,34 @@ class PresetBot(commands.Bot):
             # Parse the message to extract dialogue and actions
             # Format: !chat CharacterName: "What is being said" What is being Done
             
-            # Get user character if specified
+            # Get user character if specified, or use the last user character from this channel
             user_char = None
             user_char_info = ""
-            if user_character:
-                user_char = self.config_manager.get_user_character_by_name(user_character)
-                if user_char:
-                    # Build persona information from user character
-                    user_char_info = f"\n\nUser is playing as {user_char.get('display_name', user_character)}."
-                    if user_char.get('description'):
-                        user_char_info += f"\nCharacter description: {user_char.get('description')}"
+            active_user_character = user_character
             
             # Build the chat message
             channel_id = str(ctx.channel.id)
+            
+            # Get chat history limit from config
+            history_limit = self.config_manager.get_chat_history_limit()
+            
+            # If no user character specified, check if one was used recently in this channel
+            if not active_user_character:
+                chat_history = self.config_manager.get_chat_history(channel_id)
+                # Look through recent history for a user character
+                for msg in reversed(chat_history[-history_limit:]):
+                    if msg.get("user_character") and msg.get("author") == str(ctx.author.id):
+                        active_user_character = msg.get("user_character")
+                        break
+            
+            # Get user character info if we have an active character
+            if active_user_character:
+                user_char = self.config_manager.get_user_character_by_name(active_user_character)
+                if user_char:
+                    # Build persona information from user character
+                    user_char_info = f"\n\nUser is playing as {user_char.get('display_name', active_user_character)}."
+                    if user_char.get('description'):
+                        user_char_info += f"\nCharacter description: {user_char.get('description')}"
             
             # Get channel chat history
             chat_history = self.config_manager.get_chat_history(channel_id)
@@ -830,16 +860,16 @@ class PresetBot(commands.Bot):
             message_data = {
                 "author": str(ctx.author.id),
                 "author_name": str(ctx.author.name),
-                "user_character": user_character,
+                "user_character": active_user_character,  # Store the active character (may be inherited)
                 "content": message,
                 "type": "user",
                 "timestamp": ctx.message.created_at.isoformat()
             }
             self.config_manager.add_chat_message(channel_id, message_data)
             
-            # Build context from recent history (last 20 messages)
+            # Build context from recent history (using configured limit)
             context_messages = []
-            for msg in chat_history[-20:]:
+            for msg in chat_history[-history_limit:]:
                 if msg.get("type") == "user":
                     char_prefix = f"[{msg.get('user_character', msg.get('author_name'))}] " if msg.get('user_character') else f"[{msg.get('author_name')}] "
                     context_messages.append({
@@ -859,15 +889,12 @@ class PresetBot(commands.Bot):
             if not ai_character and self.config_manager.get_characters():
                 ai_character = self.config_manager.get_characters()[0].get("name")
             
-            # Add user character info to the message if present
-            full_message = message
-            if user_char_info:
-                full_message = message + user_char_info
-            
+            # Pass user character info to AI handler to be included in system prompt
             response = await self.ai_handler.get_ai_response(
-                full_message,
+                message,
                 character_name=ai_character,
-                additional_context=context_messages
+                additional_context=context_messages,
+                user_character_info=user_char_info if user_char_info else None
             )
             
             # Store AI response in history

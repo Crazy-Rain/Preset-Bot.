@@ -13,6 +13,8 @@ import requests
 from typing import Optional
 from bot import ConfigManager, AIResponseHandler
 import discord
+from PIL import Image, ImageTk
+from io import BytesIO
 
 
 class PresetBotGUI:
@@ -66,6 +68,65 @@ class PresetBotGUI:
         except Exception as e:
             print(f"Error uploading to catbox: {str(e)}")
             return None
+    
+    def validate_avatar_url(self, url: str) -> tuple[bool, str]:
+        """
+        Validate an avatar URL to check if it's accessible and suitable for Discord
+        
+        Args:
+            url: The URL to validate
+            
+        Returns:
+            Tuple of (is_valid, message) where message explains the result
+        """
+        if not url or not url.strip():
+            return False, "URL is empty"
+        
+        url = url.strip()
+        
+        # Check if it's a valid URL format
+        if not url.startswith(('http://', 'https://')):
+            return False, "URL must start with http:// or https://"
+        
+        try:
+            # Try to download the image header to check accessibility and size
+            response = requests.head(url, timeout=10, allow_redirects=True)
+            
+            # Check if URL is accessible
+            if response.status_code != 200:
+                return False, f"URL returned HTTP {response.status_code} - image may not be accessible"
+            
+            # Check content type
+            content_type = response.headers.get('Content-Type', '').lower()
+            valid_types = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp']
+            
+            if not any(t in content_type for t in valid_types):
+                # Try GET request as some servers don't support HEAD
+                response = requests.get(url, timeout=10, stream=True)
+                if response.status_code != 200:
+                    return False, f"URL returned HTTP {response.status_code} - image may not be accessible"
+                content_type = response.headers.get('Content-Type', '').lower()
+            
+            if not any(t in content_type for t in valid_types):
+                return False, f"Invalid image type. Must be PNG, JPG, GIF, or WEBP. Got: {content_type}"
+            
+            # Check content length (Discord has an 8MB limit for avatars, but recommend smaller)
+            content_length = response.headers.get('Content-Length')
+            if content_length:
+                size_mb = int(content_length) / (1024 * 1024)
+                if size_mb > 8:
+                    return False, f"Image is too large ({size_mb:.1f}MB). Discord supports up to 8MB, but smaller is recommended"
+                elif size_mb > 2:
+                    return True, f"⚠️ Image is large ({size_mb:.1f}MB). Smaller images load faster in Discord"
+            
+            return True, "✓ Avatar URL is valid and accessible"
+            
+        except requests.exceptions.Timeout:
+            return False, "Request timed out - URL may be slow or inaccessible"
+        except requests.exceptions.ConnectionError:
+            return False, "Connection failed - check if URL is correct and accessible"
+        except Exception as e:
+            return False, f"Error validating URL: {str(e)}"
     
     def create_widgets(self):
         """Create all GUI widgets"""
@@ -152,6 +213,20 @@ class PresetBotGUI:
         
         ttk.Label(thinking_frame, text="Content between these tags will be removed from AI responses before sending to Discord.", 
                  font=('TkDefaultFont', 8, 'italic'), wraplength=600).grid(row=3, column=0, columnspan=3, sticky=tk.W, pady=5)
+        
+        # Chat History Configuration
+        chat_frame = ttk.LabelFrame(self.config_frame, text="Chat History Settings", padding=10)
+        chat_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        ttk.Label(chat_frame, text="Message History Limit:").grid(row=0, column=0, sticky=tk.W, pady=5)
+        self.chat_history_limit_entry = ttk.Entry(chat_frame, width=10)
+        self.chat_history_limit_entry.grid(row=0, column=1, pady=5, padx=5, sticky=tk.W)
+        self.chat_history_limit_entry.insert(0, "20")
+        ttk.Label(chat_frame, text="messages (how far back to include in AI context)", 
+                 font=('TkDefaultFont', 8, 'italic')).grid(row=0, column=2, sticky=tk.W, padx=5)
+        
+        ttk.Label(chat_frame, text="Higher values allow AI to remember more conversation history but use more tokens.", 
+                 font=('TkDefaultFont', 8, 'italic'), wraplength=600).grid(row=1, column=0, columnspan=3, sticky=tk.W, pady=5)
         
         # Buttons
         button_frame = ttk.Frame(self.config_frame)
@@ -247,6 +322,7 @@ class PresetBotGUI:
         ttk.Label(avatar_frame, text="Avatar URL:").grid(row=0, column=0, sticky=tk.W, pady=5)
         self.char_avatar_url_entry = ttk.Entry(avatar_frame, width=40)
         self.char_avatar_url_entry.grid(row=0, column=1, pady=5, padx=5, sticky=tk.W)
+        ttk.Button(avatar_frame, text="Test URL", command=self.test_char_avatar_url).grid(row=0, column=2, pady=5, padx=5)
         
         # OR separator
         ttk.Label(avatar_frame, text="--- OR ---").grid(row=1, column=0, columnspan=2, pady=5)
@@ -257,6 +333,20 @@ class PresetBotGUI:
         self.char_avatar_file_entry = ttk.Entry(avatar_frame, width=30, textvariable=self.char_avatar_file_var, state='readonly')
         self.char_avatar_file_entry.grid(row=2, column=1, pady=5, padx=5, sticky=tk.W)
         ttk.Button(avatar_frame, text="Browse...", command=self.browse_avatar_file).grid(row=2, column=2, pady=5, padx=5)
+        
+        # Avatar Preview section
+        preview_frame = ttk.LabelFrame(add_frame, text="Avatar Preview", padding=5)
+        preview_frame.grid(row=0, column=3, rowspan=7, sticky=tk.N, padx=10, pady=5)
+        
+        # Preview label for image
+        self.char_avatar_preview_label = ttk.Label(preview_frame, text="No avatar loaded", relief=tk.SUNKEN, width=20)
+        self.char_avatar_preview_label.pack(pady=5)
+        
+        # Preview button to load/refresh preview
+        ttk.Button(preview_frame, text="Load Preview", command=self.load_char_avatar_preview).pack(pady=5)
+        
+        # Store the preview image to prevent garbage collection
+        self.char_avatar_preview_image = None
         
         # Action buttons
         button_frame = ttk.Frame(add_frame)
@@ -302,6 +392,75 @@ class PresetBotGUI:
         if filename:
             self.char_avatar_file_var.set(filename)
     
+    def test_char_avatar_url(self):
+        """Test character avatar URL for validity and accessibility"""
+        url = self.char_avatar_url_entry.get().strip()
+        
+        if not url:
+            messagebox.showinfo("Test Avatar URL", "Please enter an Avatar URL to test")
+            return
+        
+        # Show testing message
+        test_window = tk.Toplevel(self.root)
+        test_window.title("Testing Avatar URL")
+        test_window.geometry("300x100")
+        ttk.Label(test_window, text="Testing avatar URL...", padding=20).pack()
+        test_window.update()
+        
+        # Validate the URL
+        is_valid, message = self.validate_avatar_url(url)
+        
+        # Close testing window
+        test_window.destroy()
+        
+        # Show result
+        if is_valid:
+            messagebox.showinfo("Avatar URL Test", message)
+        else:
+            messagebox.showerror("Avatar URL Test Failed", message)
+    
+    def load_char_avatar_preview(self):
+        """Load and display character avatar preview"""
+        # Get URL from entry or file path
+        url = self.char_avatar_url_entry.get().strip()
+        file_path = self.char_avatar_file_var.get().strip()
+        
+        image_source = url if url else file_path
+        
+        if not image_source:
+            messagebox.showinfo("Avatar Preview", "Please enter an Avatar URL or select an avatar file first")
+            return
+        
+        try:
+            # Load image from URL or file
+            if url:
+                response = requests.get(url, timeout=10)
+                if response.status_code == 200:
+                    image_data = BytesIO(response.content)
+                    image = Image.open(image_data)
+                else:
+                    messagebox.showerror("Preview Error", f"Failed to load image from URL (HTTP {response.status_code})")
+                    return
+            else:
+                if os.path.exists(file_path):
+                    image = Image.open(file_path)
+                else:
+                    messagebox.showerror("Preview Error", "File does not exist")
+                    return
+            
+            # Resize image to fit preview (128x128 max)
+            image.thumbnail((128, 128), Image.Resampling.LANCZOS)
+            
+            # Convert to PhotoImage
+            photo = ImageTk.PhotoImage(image)
+            
+            # Update label with image
+            self.char_avatar_preview_label.configure(image=photo, text="")
+            self.char_avatar_preview_image = photo  # Keep reference to prevent garbage collection
+            
+        except Exception as e:
+            messagebox.showerror("Preview Error", f"Error loading image: {str(e)}")
+    
     def load_current_config(self):
         """Load current configuration into GUI"""
         # Discord Token
@@ -338,6 +497,11 @@ class PresetBotGUI:
         self.thinking_start_tag_entry.insert(0, thinking_config.get("start_tag", "<think>"))
         self.thinking_end_tag_entry.delete(0, tk.END)
         self.thinking_end_tag_entry.insert(0, thinking_config.get("end_tag", "</think>"))
+        
+        # Chat History Limit
+        chat_limit = self.config_manager.get_chat_history_limit()
+        self.chat_history_limit_entry.delete(0, tk.END)
+        self.chat_history_limit_entry.insert(0, str(chat_limit))
         
         # AI Configuration Options
         try:
@@ -398,6 +562,16 @@ class PresetBotGUI:
             thinking_start_tag = self.thinking_start_tag_entry.get()
             thinking_end_tag = self.thinking_end_tag_entry.get()
             self.config_manager.set_thinking_tags_config(thinking_enabled, thinking_start_tag, thinking_end_tag)
+            
+            # Save chat history limit
+            try:
+                chat_limit = int(self.chat_history_limit_entry.get())
+                if chat_limit < 1:
+                    raise ValueError("Chat history limit must be at least 1")
+                self.config_manager.set_chat_history_limit(chat_limit)
+            except ValueError as e:
+                messagebox.showerror("Invalid Input", f"Chat history limit must be a positive integer: {str(e)}")
+                return
             
             # Save AI configuration options
             try:
@@ -629,6 +803,20 @@ class PresetBotGUI:
             return
         
         try:
+            # Validate avatar URL if provided (and no file is being uploaded)
+            if avatar_url and not avatar_file_source:
+                is_valid, validation_msg = self.validate_avatar_url(avatar_url)
+                if not is_valid:
+                    result = messagebox.askyesno(
+                        "Avatar URL Validation Failed", 
+                        f"{validation_msg}\n\nDo you want to continue anyway?"
+                    )
+                    if not result:
+                        return
+                elif "⚠️" in validation_msg:
+                    # Show warning but don't block
+                    messagebox.showwarning("Avatar URL Warning", validation_msg)
+            
             # Handle avatar file if provided
             avatar_file_dest = ""
             if avatar_file_source and os.path.exists(avatar_file_source):
@@ -680,8 +868,24 @@ class PresetBotGUI:
             return
         
         try:
-            # Handle avatar file if provided
+            # Validate avatar URL if provided (and no file is being uploaded)
             characters = self.config_manager.get_characters()
+            current_avatar_url = characters[self.char_editing_index].get("avatar_url", "")
+            
+            if avatar_url and avatar_url != current_avatar_url and not avatar_file_source:
+                is_valid, validation_msg = self.validate_avatar_url(avatar_url)
+                if not is_valid:
+                    result = messagebox.askyesno(
+                        "Avatar URL Validation Failed", 
+                        f"{validation_msg}\n\nDo you want to continue anyway?"
+                    )
+                    if not result:
+                        return
+                elif "⚠️" in validation_msg:
+                    # Show warning but don't block
+                    messagebox.showwarning("Avatar URL Warning", validation_msg)
+            
+            # Handle avatar file if provided
             current_avatar_file = characters[self.char_editing_index].get("avatar_file", "")
             current_avatar_url = characters[self.char_editing_index].get("avatar_url", "")
             avatar_file_dest = current_avatar_file
@@ -1140,6 +1344,7 @@ class PresetBotGUI:
         ttk.Label(avatar_frame, text="Avatar URL:").grid(row=0, column=0, sticky=tk.W, pady=5)
         self.user_char_avatar_url_entry = ttk.Entry(avatar_frame, width=40)
         self.user_char_avatar_url_entry.grid(row=0, column=1, pady=5, padx=5, sticky=tk.W)
+        ttk.Button(avatar_frame, text="Test URL", command=self.test_user_char_avatar_url).grid(row=0, column=2, pady=5, padx=5)
         
         # OR separator
         ttk.Label(avatar_frame, text="--- OR ---").grid(row=1, column=0, columnspan=2, pady=5)
@@ -1150,6 +1355,20 @@ class PresetBotGUI:
         self.user_char_avatar_file_entry = ttk.Entry(avatar_frame, width=30, textvariable=self.user_char_avatar_file_var, state='readonly')
         self.user_char_avatar_file_entry.grid(row=2, column=1, pady=5, padx=5, sticky=tk.W)
         ttk.Button(avatar_frame, text="Browse...", command=self.browse_user_char_avatar_file).grid(row=2, column=2, pady=5, padx=5)
+        
+        # Avatar Preview section
+        preview_frame = ttk.LabelFrame(add_frame, text="Avatar Preview", padding=5)
+        preview_frame.grid(row=0, column=3, rowspan=5, sticky=tk.N, padx=10, pady=5)
+        
+        # Preview label for image
+        self.user_char_avatar_preview_label = ttk.Label(preview_frame, text="No avatar loaded", relief=tk.SUNKEN, width=20)
+        self.user_char_avatar_preview_label.pack(pady=5)
+        
+        # Preview button to load/refresh preview
+        ttk.Button(preview_frame, text="Load Preview", command=self.load_user_char_avatar_preview).pack(pady=5)
+        
+        # Store the preview image to prevent garbage collection
+        self.user_char_avatar_preview_image = None
         
         # Action buttons
         button_frame = ttk.Frame(add_frame)
@@ -1195,6 +1414,75 @@ class PresetBotGUI:
         if filename:
             self.user_char_avatar_file_var.set(filename)
     
+    def test_user_char_avatar_url(self):
+        """Test user character avatar URL for validity and accessibility"""
+        url = self.user_char_avatar_url_entry.get().strip()
+        
+        if not url:
+            messagebox.showinfo("Test Avatar URL", "Please enter an Avatar URL to test")
+            return
+        
+        # Show testing message
+        test_window = tk.Toplevel(self.root)
+        test_window.title("Testing Avatar URL")
+        test_window.geometry("300x100")
+        ttk.Label(test_window, text="Testing avatar URL...", padding=20).pack()
+        test_window.update()
+        
+        # Validate the URL
+        is_valid, message = self.validate_avatar_url(url)
+        
+        # Close testing window
+        test_window.destroy()
+        
+        # Show result
+        if is_valid:
+            messagebox.showinfo("Avatar URL Test", message)
+        else:
+            messagebox.showerror("Avatar URL Test Failed", message)
+    
+    def load_user_char_avatar_preview(self):
+        """Load and display user character avatar preview"""
+        # Get URL from entry or file path
+        url = self.user_char_avatar_url_entry.get().strip()
+        file_path = self.user_char_avatar_file_var.get().strip()
+        
+        image_source = url if url else file_path
+        
+        if not image_source:
+            messagebox.showinfo("Avatar Preview", "Please enter an Avatar URL or select an avatar file first")
+            return
+        
+        try:
+            # Load image from URL or file
+            if url:
+                response = requests.get(url, timeout=10)
+                if response.status_code == 200:
+                    image_data = BytesIO(response.content)
+                    image = Image.open(image_data)
+                else:
+                    messagebox.showerror("Preview Error", f"Failed to load image from URL (HTTP {response.status_code})")
+                    return
+            else:
+                if os.path.exists(file_path):
+                    image = Image.open(file_path)
+                else:
+                    messagebox.showerror("Preview Error", "File does not exist")
+                    return
+            
+            # Resize image to fit preview (128x128 max)
+            image.thumbnail((128, 128), Image.Resampling.LANCZOS)
+            
+            # Convert to PhotoImage
+            photo = ImageTk.PhotoImage(image)
+            
+            # Update label with image
+            self.user_char_avatar_preview_label.configure(image=photo, text="")
+            self.user_char_avatar_preview_image = photo  # Keep reference to prevent garbage collection
+            
+        except Exception as e:
+            messagebox.showerror("Preview Error", f"Error loading image: {str(e)}")
+    
     def add_user_character(self):
         """Add a new user character"""
         name = self.user_char_name_entry.get().strip().lower().replace(" ", "_")
@@ -1208,6 +1496,20 @@ class PresetBotGUI:
             return
         
         try:
+            # Validate avatar URL if provided (and no file is being uploaded)
+            if avatar_url and not avatar_file_source:
+                is_valid, validation_msg = self.validate_avatar_url(avatar_url)
+                if not is_valid:
+                    result = messagebox.askyesno(
+                        "Avatar URL Validation Failed", 
+                        f"{validation_msg}\n\nDo you want to continue anyway?"
+                    )
+                    if not result:
+                        return
+                elif "⚠️" in validation_msg:
+                    # Show warning but don't block
+                    messagebox.showwarning("Avatar URL Warning", validation_msg)
+            
             # Handle avatar file if provided
             avatar_file_dest = ""
             if avatar_file_source and os.path.exists(avatar_file_source):
@@ -1257,8 +1559,24 @@ class PresetBotGUI:
             return
         
         try:
-            # Handle avatar file if provided
+            # Validate avatar URL if provided (and no file is being uploaded)
             characters = self.config_manager.get_user_characters()
+            current_avatar_url = characters[self.user_char_editing_index].get("avatar_url", "")
+            
+            if avatar_url and avatar_url != current_avatar_url and not avatar_file_source:
+                is_valid, validation_msg = self.validate_avatar_url(avatar_url)
+                if not is_valid:
+                    result = messagebox.askyesno(
+                        "Avatar URL Validation Failed", 
+                        f"{validation_msg}\n\nDo you want to continue anyway?"
+                    )
+                    if not result:
+                        return
+                elif "⚠️" in validation_msg:
+                    # Show warning but don't block
+                    messagebox.showwarning("Avatar URL Warning", validation_msg)
+            
+            # Handle avatar file if provided
             current_avatar_file = characters[self.user_char_editing_index].get("avatar_file", "")
             current_avatar_url = characters[self.user_char_editing_index].get("avatar_url", "")
             avatar_file_dest = current_avatar_file

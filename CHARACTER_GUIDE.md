@@ -39,6 +39,15 @@ You have two options for setting a character's avatar:
 
 **Note**: Avatar URL takes precedence if both are provided.
 
+#### Testing Avatar URLs
+- **Test URL Button**: Click the "Test URL" button next to the Avatar URL field to validate the URL before saving
+- **Validation Checks**:
+  - URL format (must start with http:// or https://)
+  - Image accessibility (checks if the URL is reachable)
+  - Image type (must be PNG, JPG, JPEG, GIF, or WEBP)
+  - Image size (warns if > 2MB, rejects if > 8MB)
+- **Automatic Validation**: When adding/updating a character with an Avatar URL, the system automatically validates it and warns you if there are issues
+
 ## Creating Characters via GUI
 
 1. **Open the GUI**
@@ -53,8 +62,12 @@ You have two options for setting a character's avatar:
    - **Display Name**: Enter the name to show in Discord (e.g., `Tech Support Bot`)
    - **Description**: Write the AI system prompt that defines behavior
    - **Avatar**: Either:
-     - Enter a URL in the "Avatar URL" field, OR
-     - Click "Browse..." to select an image file from your computer
+     - Enter a URL in the "Avatar URL" field
+       - Click "Test URL" to validate the URL before saving
+       - The system will check if the image is accessible, the right format, and not too large
+     - OR click "Browse..." to select an image file from your computer
+       - The image will be automatically uploaded to catbox.moe for hosting
+       - A local backup is saved to `character_avatars/` directory
 
 4. **Click "Add Character"**
 
@@ -252,7 +265,13 @@ New format (recommended):
   - Invalid URL (check if URL is accessible)
   - File path incorrect (ensure file exists in `character_avatars/`)
   - Discord webhook limitations (avatar must be accessible via URL)
-- **Solution**: Use a valid, publicly accessible image URL
+  - Image too large (Discord has an 8MB limit)
+  - Wrong image format (must be PNG, JPG, JPEG, GIF, or WEBP)
+- **Solution**: 
+  - Use the "Test URL" button to validate your avatar URL before saving
+  - Check the validation messages for specific issues
+  - Ensure the URL is publicly accessible (not behind authentication or a login page)
+  - Use smaller images (under 2MB recommended) for faster loading
 
 ### Webhook permission errors
 - **Error**: "Missing Permissions" or "Forbidden"
