@@ -25,9 +25,15 @@ class PresetBotGUI:
         self.root.title("Preset Discord Bot - Configuration & Manual Send")
         self.root.geometry("800x700")
         
+        # Set up window close handler to prevent X11 errors
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+        
         self.config_manager = ConfigManager()
         self.ai_handler = AIResponseHandler(self.config_manager)
         self.discord_client = None
+        
+        # Set up logging callback for AI handler
+        self.ai_handler.set_log_callback(self.log_to_console)
         
         self.create_widgets()
         self.load_current_config()
@@ -2292,13 +2298,33 @@ class PresetBotGUI:
                 messagebox.showinfo("Success", f"Console log exported to {filename}")
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to export log: {str(e)}")
+    
+    def on_closing(self):
+        """Handle window close event gracefully"""
+        try:
+            # Stop any running Discord client
+            if self.discord_client and not self.discord_client.is_closed():
+                self.discord_client.close()
+        except Exception as e:
+            print(f"Error closing Discord client: {str(e)}")
+        finally:
+            self.root.destroy()
 
 
 def main():
     """Main entry point for GUI"""
-    root = tk.Tk()
-    app = PresetBotGUI(root)
-    root.mainloop()
+    try:
+        root = tk.Tk()
+        app = PresetBotGUI(root)
+        root.mainloop()
+    except Exception as e:
+        import traceback
+        print(f"Fatal error in GUI: {str(e)}")
+        print(traceback.format_exc())
+        try:
+            messagebox.showerror("Fatal Error", f"The application encountered a fatal error:\n{str(e)}\n\nCheck console for details.")
+        except:
+            pass
 
 
 if __name__ == "__main__":
