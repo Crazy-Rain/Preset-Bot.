@@ -594,7 +594,8 @@ class AIResponseHandler:
         character_name: Optional[str] = None,
         model: Optional[str] = None,
         preset_override: Optional[Dict[str, Any]] = None,
-        additional_context: Optional[list] = None
+        additional_context: Optional[list] = None,
+        user_character_info: Optional[str] = None
     ) -> str:
         """
         Get AI response for a message
@@ -605,6 +606,7 @@ class AIResponseHandler:
             model: The model to use for generation (if None, uses selected model from config)
             preset_override: Override preset configuration
             additional_context: Additional message history context
+            user_character_info: User character description to add to system prompt
             
         Returns:
             AI generated response
@@ -639,6 +641,10 @@ class AIResponseHandler:
             if char:
                 # Use description field as system prompt, fallback to system_prompt for backward compatibility
                 system_prompt = char.get("description") or char.get("system_prompt", "You are a helpful assistant.")
+        
+        # Add user character info to system prompt if provided
+        if user_character_info:
+            system_prompt += user_character_info
         
         # Add character system prompt if no preset or if preset doesn't have system messages
         if not preset or not any(msg.get("role") == "system" for msg in messages):
@@ -859,15 +865,12 @@ class PresetBot(commands.Bot):
             if not ai_character and self.config_manager.get_characters():
                 ai_character = self.config_manager.get_characters()[0].get("name")
             
-            # Add user character info to the message if present
-            full_message = message
-            if user_char_info:
-                full_message = message + user_char_info
-            
+            # Pass user character info to AI handler to be included in system prompt
             response = await self.ai_handler.get_ai_response(
-                full_message,
+                message,
                 character_name=ai_character,
-                additional_context=context_messages
+                additional_context=context_messages,
+                user_character_info=user_char_info if user_char_info else None
             )
             
             # Store AI response in history

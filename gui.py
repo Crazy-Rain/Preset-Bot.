@@ -13,6 +13,8 @@ import requests
 from typing import Optional
 from bot import ConfigManager, AIResponseHandler
 import discord
+from PIL import Image, ImageTk
+from io import BytesIO
 
 
 class PresetBotGUI:
@@ -318,6 +320,20 @@ class PresetBotGUI:
         self.char_avatar_file_entry.grid(row=2, column=1, pady=5, padx=5, sticky=tk.W)
         ttk.Button(avatar_frame, text="Browse...", command=self.browse_avatar_file).grid(row=2, column=2, pady=5, padx=5)
         
+        # Avatar Preview section
+        preview_frame = ttk.LabelFrame(add_frame, text="Avatar Preview", padding=5)
+        preview_frame.grid(row=0, column=3, rowspan=7, sticky=tk.N, padx=10, pady=5)
+        
+        # Preview label for image
+        self.char_avatar_preview_label = ttk.Label(preview_frame, text="No avatar loaded", relief=tk.SUNKEN, width=20)
+        self.char_avatar_preview_label.pack(pady=5)
+        
+        # Preview button to load/refresh preview
+        ttk.Button(preview_frame, text="Load Preview", command=self.load_char_avatar_preview).pack(pady=5)
+        
+        # Store the preview image to prevent garbage collection
+        self.char_avatar_preview_image = None
+        
         # Action buttons
         button_frame = ttk.Frame(add_frame)
         button_frame.grid(row=7, column=1, pady=10)
@@ -388,6 +404,48 @@ class PresetBotGUI:
             messagebox.showinfo("Avatar URL Test", message)
         else:
             messagebox.showerror("Avatar URL Test Failed", message)
+    
+    def load_char_avatar_preview(self):
+        """Load and display character avatar preview"""
+        # Get URL from entry or file path
+        url = self.char_avatar_url_entry.get().strip()
+        file_path = self.char_avatar_file_var.get().strip()
+        
+        image_source = url if url else file_path
+        
+        if not image_source:
+            messagebox.showinfo("Avatar Preview", "Please enter an Avatar URL or select an avatar file first")
+            return
+        
+        try:
+            # Load image from URL or file
+            if url:
+                response = requests.get(url, timeout=10)
+                if response.status_code == 200:
+                    image_data = BytesIO(response.content)
+                    image = Image.open(image_data)
+                else:
+                    messagebox.showerror("Preview Error", f"Failed to load image from URL (HTTP {response.status_code})")
+                    return
+            else:
+                if os.path.exists(file_path):
+                    image = Image.open(file_path)
+                else:
+                    messagebox.showerror("Preview Error", "File does not exist")
+                    return
+            
+            # Resize image to fit preview (128x128 max)
+            image.thumbnail((128, 128), Image.Resampling.LANCZOS)
+            
+            # Convert to PhotoImage
+            photo = ImageTk.PhotoImage(image)
+            
+            # Update label with image
+            self.char_avatar_preview_label.configure(image=photo, text="")
+            self.char_avatar_preview_image = photo  # Keep reference to prevent garbage collection
+            
+        except Exception as e:
+            messagebox.showerror("Preview Error", f"Error loading image: {str(e)}")
     
     def load_current_config(self):
         """Load current configuration into GUI"""
@@ -1269,6 +1327,20 @@ class PresetBotGUI:
         self.user_char_avatar_file_entry.grid(row=2, column=1, pady=5, padx=5, sticky=tk.W)
         ttk.Button(avatar_frame, text="Browse...", command=self.browse_user_char_avatar_file).grid(row=2, column=2, pady=5, padx=5)
         
+        # Avatar Preview section
+        preview_frame = ttk.LabelFrame(add_frame, text="Avatar Preview", padding=5)
+        preview_frame.grid(row=0, column=3, rowspan=5, sticky=tk.N, padx=10, pady=5)
+        
+        # Preview label for image
+        self.user_char_avatar_preview_label = ttk.Label(preview_frame, text="No avatar loaded", relief=tk.SUNKEN, width=20)
+        self.user_char_avatar_preview_label.pack(pady=5)
+        
+        # Preview button to load/refresh preview
+        ttk.Button(preview_frame, text="Load Preview", command=self.load_user_char_avatar_preview).pack(pady=5)
+        
+        # Store the preview image to prevent garbage collection
+        self.user_char_avatar_preview_image = None
+        
         # Action buttons
         button_frame = ttk.Frame(add_frame)
         button_frame.grid(row=5, column=1, pady=10)
@@ -1339,6 +1411,48 @@ class PresetBotGUI:
             messagebox.showinfo("Avatar URL Test", message)
         else:
             messagebox.showerror("Avatar URL Test Failed", message)
+    
+    def load_user_char_avatar_preview(self):
+        """Load and display user character avatar preview"""
+        # Get URL from entry or file path
+        url = self.user_char_avatar_url_entry.get().strip()
+        file_path = self.user_char_avatar_file_var.get().strip()
+        
+        image_source = url if url else file_path
+        
+        if not image_source:
+            messagebox.showinfo("Avatar Preview", "Please enter an Avatar URL or select an avatar file first")
+            return
+        
+        try:
+            # Load image from URL or file
+            if url:
+                response = requests.get(url, timeout=10)
+                if response.status_code == 200:
+                    image_data = BytesIO(response.content)
+                    image = Image.open(image_data)
+                else:
+                    messagebox.showerror("Preview Error", f"Failed to load image from URL (HTTP {response.status_code})")
+                    return
+            else:
+                if os.path.exists(file_path):
+                    image = Image.open(file_path)
+                else:
+                    messagebox.showerror("Preview Error", "File does not exist")
+                    return
+            
+            # Resize image to fit preview (128x128 max)
+            image.thumbnail((128, 128), Image.Resampling.LANCZOS)
+            
+            # Convert to PhotoImage
+            photo = ImageTk.PhotoImage(image)
+            
+            # Update label with image
+            self.user_char_avatar_preview_label.configure(image=photo, text="")
+            self.user_char_avatar_preview_image = photo  # Keep reference to prevent garbage collection
+            
+        except Exception as e:
+            messagebox.showerror("Preview Error", f"Error loading image: {str(e)}")
     
     def add_user_character(self):
         """Add a new user character"""
