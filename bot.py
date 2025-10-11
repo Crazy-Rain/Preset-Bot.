@@ -342,6 +342,15 @@ class ConfigManager:
         self.config["thinking_tags"]["end_tag"] = end_tag
         self.save_config()
     
+    def get_chat_history_limit(self) -> int:
+        """Get chat history message limit for context"""
+        return self.config.get("chat_history_limit", 20)
+    
+    def set_chat_history_limit(self, limit: int) -> None:
+        """Set chat history message limit for context"""
+        self.config["chat_history_limit"] = max(1, int(limit))  # Ensure at least 1
+        self.save_config()
+    
     # AI Configuration Options Management
     def get_ai_config_options(self) -> Dict[str, Any]:
         """Get AI configuration options"""
@@ -823,11 +832,14 @@ class PresetBot(commands.Bot):
             # Build the chat message
             channel_id = str(ctx.channel.id)
             
+            # Get chat history limit from config
+            history_limit = self.config_manager.get_chat_history_limit()
+            
             # If no user character specified, check if one was used recently in this channel
             if not active_user_character:
                 chat_history = self.config_manager.get_chat_history(channel_id)
-                # Look through recent history (last 20 messages) for a user character
-                for msg in reversed(chat_history[-20:]):
+                # Look through recent history for a user character
+                for msg in reversed(chat_history[-history_limit:]):
                     if msg.get("user_character") and msg.get("author") == str(ctx.author.id):
                         active_user_character = msg.get("user_character")
                         break
@@ -855,9 +867,9 @@ class PresetBot(commands.Bot):
             }
             self.config_manager.add_chat_message(channel_id, message_data)
             
-            # Build context from recent history (last 20 messages)
+            # Build context from recent history (using configured limit)
             context_messages = []
-            for msg in chat_history[-20:]:
+            for msg in chat_history[-history_limit:]:
                 if msg.get("type") == "user":
                     char_prefix = f"[{msg.get('user_character', msg.get('author_name'))}] " if msg.get('user_character') else f"[{msg.get('author_name')}] "
                     context_messages.append({

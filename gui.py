@@ -214,6 +214,20 @@ class PresetBotGUI:
         ttk.Label(thinking_frame, text="Content between these tags will be removed from AI responses before sending to Discord.", 
                  font=('TkDefaultFont', 8, 'italic'), wraplength=600).grid(row=3, column=0, columnspan=3, sticky=tk.W, pady=5)
         
+        # Chat History Configuration
+        chat_frame = ttk.LabelFrame(self.config_frame, text="Chat History Settings", padding=10)
+        chat_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        ttk.Label(chat_frame, text="Message History Limit:").grid(row=0, column=0, sticky=tk.W, pady=5)
+        self.chat_history_limit_entry = ttk.Entry(chat_frame, width=10)
+        self.chat_history_limit_entry.grid(row=0, column=1, pady=5, padx=5, sticky=tk.W)
+        self.chat_history_limit_entry.insert(0, "20")
+        ttk.Label(chat_frame, text="messages (how far back to include in AI context)", 
+                 font=('TkDefaultFont', 8, 'italic')).grid(row=0, column=2, sticky=tk.W, padx=5)
+        
+        ttk.Label(chat_frame, text="Higher values allow AI to remember more conversation history but use more tokens.", 
+                 font=('TkDefaultFont', 8, 'italic'), wraplength=600).grid(row=1, column=0, columnspan=3, sticky=tk.W, pady=5)
+        
         # Buttons
         button_frame = ttk.Frame(self.config_frame)
         button_frame.pack(fill=tk.X, padx=10, pady=10)
@@ -484,6 +498,11 @@ class PresetBotGUI:
         self.thinking_end_tag_entry.delete(0, tk.END)
         self.thinking_end_tag_entry.insert(0, thinking_config.get("end_tag", "</think>"))
         
+        # Chat History Limit
+        chat_limit = self.config_manager.get_chat_history_limit()
+        self.chat_history_limit_entry.delete(0, tk.END)
+        self.chat_history_limit_entry.insert(0, str(chat_limit))
+        
         # AI Configuration Options
         try:
             ai_config = self.config_manager.get_ai_config_options()
@@ -543,6 +562,16 @@ class PresetBotGUI:
             thinking_start_tag = self.thinking_start_tag_entry.get()
             thinking_end_tag = self.thinking_end_tag_entry.get()
             self.config_manager.set_thinking_tags_config(thinking_enabled, thinking_start_tag, thinking_end_tag)
+            
+            # Save chat history limit
+            try:
+                chat_limit = int(self.chat_history_limit_entry.get())
+                if chat_limit < 1:
+                    raise ValueError("Chat history limit must be at least 1")
+                self.config_manager.set_chat_history_limit(chat_limit)
+            except ValueError as e:
+                messagebox.showerror("Invalid Input", f"Chat history limit must be a positive integer: {str(e)}")
+                return
             
             # Save AI configuration options
             try:
