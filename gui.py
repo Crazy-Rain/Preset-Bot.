@@ -67,6 +67,65 @@ class PresetBotGUI:
             print(f"Error uploading to catbox: {str(e)}")
             return None
     
+    def validate_avatar_url(self, url: str) -> tuple[bool, str]:
+        """
+        Validate an avatar URL to check if it's accessible and suitable for Discord
+        
+        Args:
+            url: The URL to validate
+            
+        Returns:
+            Tuple of (is_valid, message) where message explains the result
+        """
+        if not url or not url.strip():
+            return False, "URL is empty"
+        
+        url = url.strip()
+        
+        # Check if it's a valid URL format
+        if not url.startswith(('http://', 'https://')):
+            return False, "URL must start with http:// or https://"
+        
+        try:
+            # Try to download the image header to check accessibility and size
+            response = requests.head(url, timeout=10, allow_redirects=True)
+            
+            # Check if URL is accessible
+            if response.status_code != 200:
+                return False, f"URL returned HTTP {response.status_code} - image may not be accessible"
+            
+            # Check content type
+            content_type = response.headers.get('Content-Type', '').lower()
+            valid_types = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp']
+            
+            if not any(t in content_type for t in valid_types):
+                # Try GET request as some servers don't support HEAD
+                response = requests.get(url, timeout=10, stream=True)
+                if response.status_code != 200:
+                    return False, f"URL returned HTTP {response.status_code} - image may not be accessible"
+                content_type = response.headers.get('Content-Type', '').lower()
+            
+            if not any(t in content_type for t in valid_types):
+                return False, f"Invalid image type. Must be PNG, JPG, GIF, or WEBP. Got: {content_type}"
+            
+            # Check content length (Discord has an 8MB limit for avatars, but recommend smaller)
+            content_length = response.headers.get('Content-Length')
+            if content_length:
+                size_mb = int(content_length) / (1024 * 1024)
+                if size_mb > 8:
+                    return False, f"Image is too large ({size_mb:.1f}MB). Discord supports up to 8MB, but smaller is recommended"
+                elif size_mb > 2:
+                    return True, f"⚠️ Image is large ({size_mb:.1f}MB). Smaller images load faster in Discord"
+            
+            return True, "✓ Avatar URL is valid and accessible"
+            
+        except requests.exceptions.Timeout:
+            return False, "Request timed out - URL may be slow or inaccessible"
+        except requests.exceptions.ConnectionError:
+            return False, "Connection failed - check if URL is correct and accessible"
+        except Exception as e:
+            return False, f"Error validating URL: {str(e)}"
+    
     def create_widgets(self):
         """Create all GUI widgets"""
         
@@ -247,6 +306,7 @@ class PresetBotGUI:
         ttk.Label(avatar_frame, text="Avatar URL:").grid(row=0, column=0, sticky=tk.W, pady=5)
         self.char_avatar_url_entry = ttk.Entry(avatar_frame, width=40)
         self.char_avatar_url_entry.grid(row=0, column=1, pady=5, padx=5, sticky=tk.W)
+        ttk.Button(avatar_frame, text="Test URL", command=self.test_char_avatar_url).grid(row=0, column=2, pady=5, padx=5)
         
         # OR separator
         ttk.Label(avatar_frame, text="--- OR ---").grid(row=1, column=0, columnspan=2, pady=5)
@@ -301,6 +361,33 @@ class PresetBotGUI:
         )
         if filename:
             self.char_avatar_file_var.set(filename)
+    
+    def test_char_avatar_url(self):
+        """Test character avatar URL for validity and accessibility"""
+        url = self.char_avatar_url_entry.get().strip()
+        
+        if not url:
+            messagebox.showinfo("Test Avatar URL", "Please enter an Avatar URL to test")
+            return
+        
+        # Show testing message
+        test_window = tk.Toplevel(self.root)
+        test_window.title("Testing Avatar URL")
+        test_window.geometry("300x100")
+        ttk.Label(test_window, text="Testing avatar URL...", padding=20).pack()
+        test_window.update()
+        
+        # Validate the URL
+        is_valid, message = self.validate_avatar_url(url)
+        
+        # Close testing window
+        test_window.destroy()
+        
+        # Show result
+        if is_valid:
+            messagebox.showinfo("Avatar URL Test", message)
+        else:
+            messagebox.showerror("Avatar URL Test Failed", message)
     
     def load_current_config(self):
         """Load current configuration into GUI"""
@@ -629,6 +716,20 @@ class PresetBotGUI:
             return
         
         try:
+            # Validate avatar URL if provided (and no file is being uploaded)
+            if avatar_url and not avatar_file_source:
+                is_valid, validation_msg = self.validate_avatar_url(avatar_url)
+                if not is_valid:
+                    result = messagebox.askyesno(
+                        "Avatar URL Validation Failed", 
+                        f"{validation_msg}\n\nDo you want to continue anyway?"
+                    )
+                    if not result:
+                        return
+                elif "⚠️" in validation_msg:
+                    # Show warning but don't block
+                    messagebox.showwarning("Avatar URL Warning", validation_msg)
+            
             # Handle avatar file if provided
             avatar_file_dest = ""
             if avatar_file_source and os.path.exists(avatar_file_source):
@@ -680,8 +781,24 @@ class PresetBotGUI:
             return
         
         try:
-            # Handle avatar file if provided
+            # Validate avatar URL if provided (and no file is being uploaded)
             characters = self.config_manager.get_characters()
+            current_avatar_url = characters[self.char_editing_index].get("avatar_url", "")
+            
+            if avatar_url and avatar_url != current_avatar_url and not avatar_file_source:
+                is_valid, validation_msg = self.validate_avatar_url(avatar_url)
+                if not is_valid:
+                    result = messagebox.askyesno(
+                        "Avatar URL Validation Failed", 
+                        f"{validation_msg}\n\nDo you want to continue anyway?"
+                    )
+                    if not result:
+                        return
+                elif "⚠️" in validation_msg:
+                    # Show warning but don't block
+                    messagebox.showwarning("Avatar URL Warning", validation_msg)
+            
+            # Handle avatar file if provided
             current_avatar_file = characters[self.char_editing_index].get("avatar_file", "")
             current_avatar_url = characters[self.char_editing_index].get("avatar_url", "")
             avatar_file_dest = current_avatar_file
@@ -1140,6 +1257,7 @@ class PresetBotGUI:
         ttk.Label(avatar_frame, text="Avatar URL:").grid(row=0, column=0, sticky=tk.W, pady=5)
         self.user_char_avatar_url_entry = ttk.Entry(avatar_frame, width=40)
         self.user_char_avatar_url_entry.grid(row=0, column=1, pady=5, padx=5, sticky=tk.W)
+        ttk.Button(avatar_frame, text="Test URL", command=self.test_user_char_avatar_url).grid(row=0, column=2, pady=5, padx=5)
         
         # OR separator
         ttk.Label(avatar_frame, text="--- OR ---").grid(row=1, column=0, columnspan=2, pady=5)
@@ -1195,6 +1313,33 @@ class PresetBotGUI:
         if filename:
             self.user_char_avatar_file_var.set(filename)
     
+    def test_user_char_avatar_url(self):
+        """Test user character avatar URL for validity and accessibility"""
+        url = self.user_char_avatar_url_entry.get().strip()
+        
+        if not url:
+            messagebox.showinfo("Test Avatar URL", "Please enter an Avatar URL to test")
+            return
+        
+        # Show testing message
+        test_window = tk.Toplevel(self.root)
+        test_window.title("Testing Avatar URL")
+        test_window.geometry("300x100")
+        ttk.Label(test_window, text="Testing avatar URL...", padding=20).pack()
+        test_window.update()
+        
+        # Validate the URL
+        is_valid, message = self.validate_avatar_url(url)
+        
+        # Close testing window
+        test_window.destroy()
+        
+        # Show result
+        if is_valid:
+            messagebox.showinfo("Avatar URL Test", message)
+        else:
+            messagebox.showerror("Avatar URL Test Failed", message)
+    
     def add_user_character(self):
         """Add a new user character"""
         name = self.user_char_name_entry.get().strip().lower().replace(" ", "_")
@@ -1208,6 +1353,20 @@ class PresetBotGUI:
             return
         
         try:
+            # Validate avatar URL if provided (and no file is being uploaded)
+            if avatar_url and not avatar_file_source:
+                is_valid, validation_msg = self.validate_avatar_url(avatar_url)
+                if not is_valid:
+                    result = messagebox.askyesno(
+                        "Avatar URL Validation Failed", 
+                        f"{validation_msg}\n\nDo you want to continue anyway?"
+                    )
+                    if not result:
+                        return
+                elif "⚠️" in validation_msg:
+                    # Show warning but don't block
+                    messagebox.showwarning("Avatar URL Warning", validation_msg)
+            
             # Handle avatar file if provided
             avatar_file_dest = ""
             if avatar_file_source and os.path.exists(avatar_file_source):
@@ -1257,8 +1416,24 @@ class PresetBotGUI:
             return
         
         try:
-            # Handle avatar file if provided
+            # Validate avatar URL if provided (and no file is being uploaded)
             characters = self.config_manager.get_user_characters()
+            current_avatar_url = characters[self.user_char_editing_index].get("avatar_url", "")
+            
+            if avatar_url and avatar_url != current_avatar_url and not avatar_file_source:
+                is_valid, validation_msg = self.validate_avatar_url(avatar_url)
+                if not is_valid:
+                    result = messagebox.askyesno(
+                        "Avatar URL Validation Failed", 
+                        f"{validation_msg}\n\nDo you want to continue anyway?"
+                    )
+                    if not result:
+                        return
+                elif "⚠️" in validation_msg:
+                    # Show warning but don't block
+                    messagebox.showwarning("Avatar URL Warning", validation_msg)
+            
+            # Handle avatar file if provided
             current_avatar_file = characters[self.user_char_editing_index].get("avatar_file", "")
             current_avatar_url = characters[self.user_char_editing_index].get("avatar_url", "")
             avatar_file_dest = current_avatar_file
