@@ -11,7 +11,7 @@ import threading
 import shutil
 import requests
 from typing import Optional
-from bot import ConfigManager, AIResponseHandler
+from bot import ConfigManager, AIResponseHandler, split_text_intelligently
 import discord
 from PIL import Image, ImageTk
 from io import BytesIO
@@ -721,6 +721,9 @@ class PresetBotGUI:
         
         def send():
             try:
+                # Reload config to get latest character updates
+                self.config_manager.reload_config()
+                
                 # Get character data
                 char_data = self.config_manager.get_character_by_name(character)
                 if not char_data:
@@ -834,33 +837,33 @@ class PresetBotGUI:
                 # No avatar
                 await webhook.send(content=content, username=display_name)
         else:
-            # Content is too long - need to split
-            # Split into chunks of ~1900 characters to leave room for safety
-            chunk_size = 1900
-            chunks = [content[i:i+chunk_size] for i in range(0, len(content), chunk_size)]
+            # Content is too long - need to split intelligently at sentence boundaries
+            chunks = split_text_intelligently(content, max_chunk_size=1900)
             
-            # Send first message with avatar image (if local file) or just first chunk
+            # If we have an avatar image file, send it FIRST as a separate message
+            # This ensures the image appears before the text chunks
             if avatar_image:
-                # Send avatar image first with first chunk of text
+                # Send avatar image first on its own
                 if avatar_url:
-                    # Both URL and local file - use URL for avatar, attach file with first chunk
-                    await webhook.send(content=chunks[0], username=display_name, avatar_url=avatar_url, file=avatar_image)
+                    # Use URL for avatar icon
+                    await webhook.send(content="", username=display_name, avatar_url=avatar_url, file=avatar_image)
                 else:
-                    # Only local file - attach to first message
-                    await webhook.send(content=chunks[0], username=display_name, file=avatar_image)
+                    # Just the file
+                    await webhook.send(content="", username=display_name, file=avatar_image)
+                
+                # Now send all text chunks (no need to attach image again)
+                for chunk in chunks:
+                    if avatar_url:
+                        await webhook.send(content=chunk, username=display_name, avatar_url=avatar_url)
+                    else:
+                        await webhook.send(content=chunk, username=display_name)
             else:
-                # No avatar file, just send first chunk with avatar_url if available
-                if avatar_url:
-                    await webhook.send(content=chunks[0], username=display_name, avatar_url=avatar_url)
-                else:
-                    await webhook.send(content=chunks[0], username=display_name)
-            
-            # Send remaining chunks
-            for chunk in chunks[1:]:
-                if avatar_url:
-                    await webhook.send(content=chunk, username=display_name, avatar_url=avatar_url)
-                else:
-                    await webhook.send(content=chunk, username=display_name)
+                # No avatar file, send chunks with avatar_url if available
+                for chunk in chunks:
+                    if avatar_url:
+                        await webhook.send(content=chunk, username=display_name, avatar_url=avatar_url)
+                    else:
+                        await webhook.send(content=chunk, username=display_name)
             
             self.log_to_console(f"Message split into {len(chunks)} chunks due to length", 'info')
     

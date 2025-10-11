@@ -91,6 +91,10 @@ class ConfigManager:
         with open(self.config_path, 'w') as f:
             json.dump(self.config, f, indent=2)
     
+    def reload_config(self) -> None:
+        """Reload configuration from file to get latest changes"""
+        self.config = self._load_config()
+    
     def get_discord_token(self) -> str:
         """Get Discord bot token"""
         return self.config.get("discord", {}).get("token", "")
@@ -550,6 +554,65 @@ class ConfigManager:
         return entries
 
 
+def split_text_intelligently(text: str, max_chunk_size: int = 1900) -> list:
+    """
+    Split text into chunks at sentence boundaries when possible.
+    
+    Args:
+        text: The text to split
+        max_chunk_size: Maximum size of each chunk
+        
+    Returns:
+        List of text chunks
+    """
+    # If text is short enough, return as-is
+    if len(text) <= max_chunk_size:
+        return [text]
+    
+    chunks = []
+    remaining = text
+    
+    while remaining:
+        # If what's left is small enough, add it and we're done
+        if len(remaining) <= max_chunk_size:
+            chunks.append(remaining)
+            break
+        
+        # Find a good split point within the max chunk size
+        chunk = remaining[:max_chunk_size]
+        
+        # Look for sentence endings: . ! ? followed by space or newline, or just newline
+        # Search backwards from the end of the chunk
+        best_split = -1
+        
+        # Try to find sentence boundary (. ! ? followed by space/newline or double newline)
+        for i in range(len(chunk) - 1, max(len(chunk) - 200, 0), -1):
+            # Check for sentence endings
+            if i > 0 and chunk[i] in '.!?' and (i + 1 >= len(chunk) or chunk[i + 1] in ' \n\t'):
+                best_split = i + 1
+                break
+            # Also check for paragraph breaks (double newline)
+            if i > 0 and chunk[i-1:i+1] == '\n\n':
+                best_split = i + 1
+                break
+        
+        # If no sentence boundary found, look for any space to avoid splitting words
+        if best_split == -1:
+            for i in range(len(chunk) - 1, max(len(chunk) - 100, 0), -1):
+                if chunk[i] == ' ':
+                    best_split = i + 1
+                    break
+        
+        # If still no good split point, just split at max_chunk_size
+        if best_split == -1:
+            best_split = max_chunk_size
+        
+        # Add the chunk and continue with the rest
+        chunks.append(chunk[:best_split].rstrip())
+        remaining = remaining[best_split:].lstrip()
+    
+    return chunks
+
 
 class AIResponseHandler:
     """Handles AI responses using OpenAI compatible API"""
@@ -797,6 +860,9 @@ class PresetBot(commands.Bot):
             Usage: !manualsend <server_id> <channel_id> <character> <message>
             """
             try:
+                # Reload config to get latest character/lorebook updates
+                self.config_manager.reload_config()
+                
                 # Get the channel
                 channel = self.get_channel(int(channel_id))
                 if not channel:
@@ -828,6 +894,9 @@ class PresetBot(commands.Bot):
             Ask the AI a question
             Usage: !ask [character] <message>
             """
+            # Reload config to get latest character/lorebook updates
+            self.config_manager.reload_config()
+            
             if character and character in [c.get("name") for c in self.config_manager.get_characters()]:
                 response = await self.ai_handler.get_ai_response(message, character)
             else:
@@ -845,6 +914,9 @@ class PresetBot(commands.Bot):
             Example: !chat Alice: "Hello there!" waves enthusiastically
             """
             try:
+                # Reload config to get latest character/lorebook updates
+                self.config_manager.reload_config()
+                
                 # Parse the message to extract dialogue and actions
                 # Format: !chat CharacterName: "What is being said" What is being Done
                 
@@ -1285,33 +1357,33 @@ class PresetBot(commands.Bot):
                 # No avatar
                 await webhook.send(content=content, username=display_name)
         else:
-            # Content is too long - need to split
-            # Split into chunks of ~1900 characters to leave room for safety
-            chunk_size = 1900
-            chunks = [content[i:i+chunk_size] for i in range(0, len(content), chunk_size)]
+            # Content is too long - need to split intelligently at sentence boundaries
+            chunks = split_text_intelligently(content, max_chunk_size=1900)
             
-            # Send first message with avatar image (if local file) or just first chunk
+            # If we have an avatar image file, send it FIRST as a separate message
+            # This ensures the image appears before the text chunks
             if avatar_image:
-                # Send avatar image first with first chunk of text
+                # Send avatar image first on its own
                 if avatar_url:
-                    # Both URL and local file - use URL for avatar, attach file with first chunk
-                    await webhook.send(content=chunks[0], username=display_name, avatar_url=avatar_url, file=avatar_image)
+                    # Use URL for avatar icon
+                    await webhook.send(content="", username=display_name, avatar_url=avatar_url, file=avatar_image)
                 else:
-                    # Only local file - attach to first message
-                    await webhook.send(content=chunks[0], username=display_name, file=avatar_image)
+                    # Just the file
+                    await webhook.send(content="", username=display_name, file=avatar_image)
+                
+                # Now send all text chunks (no need to attach image again)
+                for chunk in chunks:
+                    if avatar_url:
+                        await webhook.send(content=chunk, username=display_name, avatar_url=avatar_url)
+                    else:
+                        await webhook.send(content=chunk, username=display_name)
             else:
-                # No avatar file, just send first chunk with avatar_url if available
-                if avatar_url:
-                    await webhook.send(content=chunks[0], username=display_name, avatar_url=avatar_url)
-                else:
-                    await webhook.send(content=chunks[0], username=display_name)
-            
-            # Send remaining chunks
-            for chunk in chunks[1:]:
-                if avatar_url:
-                    await webhook.send(content=chunk, username=display_name, avatar_url=avatar_url)
-                else:
-                    await webhook.send(content=chunk, username=display_name)
+                # No avatar file, send chunks with avatar_url if available
+                for chunk in chunks:
+                    if avatar_url:
+                        await webhook.send(content=chunk, username=display_name, avatar_url=avatar_url)
+                    else:
+                        await webhook.send(content=chunk, username=display_name)
     
     async def on_ready(self):
         """Called when bot is ready"""
