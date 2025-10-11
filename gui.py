@@ -794,11 +794,30 @@ class PresetBotGUI:
         # Get character display info
         display_name = character.get("display_name", character.get("name", "Character"))
         avatar_url = character.get("avatar_url", "")
+        avatar_file = character.get("avatar_file", "")
+        
+        # Prepare avatar - use URL if available, otherwise attach local file
+        avatar_image = None
+        if avatar_file and os.path.exists(avatar_file):
+            # Attach local avatar file as an image in the message
+            try:
+                avatar_image = discord.File(avatar_file, filename="avatar.png")
+            except Exception as e:
+                self.log_to_console(f"Failed to load avatar file: {str(e)}", 'error')
         
         # Send via webhook
         if avatar_url:
-            await webhook.send(content=content, username=display_name, avatar_url=avatar_url)
+            # Use avatar_url for webhook avatar (preferred method)
+            if avatar_image:
+                # Both URL and local file - use URL for avatar, attach file
+                await webhook.send(content=content, username=display_name, avatar_url=avatar_url, file=avatar_image)
+            else:
+                await webhook.send(content=content, username=display_name, avatar_url=avatar_url)
+        elif avatar_image:
+            # Only local file - attach it to the message
+            await webhook.send(content=content, username=display_name, file=avatar_image)
         else:
+            # No avatar
             await webhook.send(content=content, username=display_name)
     
     def clear_message(self):
