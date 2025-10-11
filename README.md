@@ -32,17 +32,25 @@ This is a Discord bot with AI response capabilities and manual send features. Th
 - Context-aware responses using last 20 messages
 - Integrates with User Characters
 
-### 5. Manual Send
+### 5. Lorebook System (NEW!)
+- Create contextual information repositories
+- Active/Inactive toggle per lorebook
+- **Constant entries**: Always included in AI context
+- **Normal entries**: Triggered by keywords in messages
+- Perfect for world-building, character lore, and campaign tracking
+- Similar to SillyTavern's lorebook functionality
+
+### 6. Manual Send
 - Send messages directly to Discord channels
 - Requires Server ID and Channel ID
 - Character selection from configured characters
 - AI generates responses based on your input and selected character
 
-### 6. Discord Bot Configuration
+### 7. Discord Bot Configuration
 - Secure token storage in config file
 - Easy token management through GUI or config file
 
-### 7. Character System
+### 8. Character System
 - Create and manage different AI characters with custom system prompts
 - Avatar support for characters (URL or local file)
 - Webhook integration for character identity in Discord
@@ -90,10 +98,20 @@ Available commands:
 - `!setopenai <base_url> <api_key>` - Configure OpenAI API (Admin only)
 - `!addcharacter <name> <system_prompt>` - Add new character (Admin only)
 - `!characters` - List all characters
+- `!character <name>` - Set channel-specific character (NEW!)
 - `!manualsend <server_id> <channel_id> <character> <message>` - Send manual message (Admin only)
 - `!ask [character] <message>` - Ask the AI a question
 - `!chat [character]: <message>` - Chat with context tracking (NEW!)
 - `!clearchat` - Clear chat history for current channel (Admin only, NEW!)
+- `!lorebook <action> [args]` - Manage lorebooks (NEW!)
+  - `create <name>` - Create a new lorebook
+  - `list` - List all lorebooks
+  - `activate <name>` - Activate a lorebook
+  - `deactivate <name>` - Deactivate a lorebook
+  - `show <name>` - Show lorebook entries
+  - `addentry <name> <constant|normal> <content> [keywords...]` - Add entry
+  - `delentry <name> <index>` - Delete entry
+  - `delete <name>` - Delete lorebook
 
 ## Configuration
 
@@ -116,7 +134,8 @@ Available commands:
   "user_characters": [],
   "presets": [],
   "active_preset": null,
-  "chat_history": {}
+  "chat_history": {},
+  "lorebooks": []
 }
 ```
 
@@ -150,8 +169,10 @@ Preset-Bot./
 
 ## Advanced Features
 
-For detailed information about the new Preset System, User Characters, and Chat features, see:
+For detailed information about the new features, see:
 - **[PRESET_FEATURES.md](PRESET_FEATURES.md)** - Comprehensive guide to presets, user characters, and chat system
+- **[LOREBOOK_GUIDE.md](LOREBOOK_GUIDE.md)** - Complete lorebook documentation with examples
+- **[LOREBOOK_QUICK_REFERENCE.md](LOREBOOK_QUICK_REFERENCE.md)** - Quick command reference for lorebooks
 
 ## Security Notes
 - `config.json` is excluded from version control (.gitignore)

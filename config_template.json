@@ -42,5 +42,6 @@
   "last_manual_send": {
     "server_id": "",
     "channel_id": ""
-  }
+  },
+  "lorebooks": []
 }
