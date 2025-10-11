@@ -41,7 +41,8 @@ class ConfigManager:
             },
             "openai": {
                 "base_url": "https://api.openai.com/v1",
-                "api_key": ""
+                "api_key": "",
+                "model": "gpt-3.5-turbo"
             },
             "characters": [
                 {
@@ -55,7 +56,11 @@ class ConfigManager:
             "user_characters": [],
             "presets": [],
             "active_preset": None,
-            "chat_history": {}
+            "chat_history": {},
+            "last_manual_send": {
+                "server_id": "",
+                "channel_id": ""
+            }
         }
     
     def save_config(self, config: Optional[Dict[str, Any]] = None) -> None:
@@ -231,6 +236,35 @@ class ConfigManager:
             if channel_key in self.config["chat_history"]:
                 self.config["chat_history"][channel_key] = []
                 self.save_config()
+    
+    # Last Manual Send Target Management
+    def get_last_manual_send_target(self) -> Dict[str, str]:
+        """Get last used server and channel IDs for manual send"""
+        return self.config.get("last_manual_send", {"server_id": "", "channel_id": ""})
+    
+    def set_last_manual_send_target(self, server_id: str, channel_id: str) -> None:
+        """Save last used server and channel IDs for manual send"""
+        if "last_manual_send" not in self.config:
+            self.config["last_manual_send"] = {}
+        self.config["last_manual_send"]["server_id"] = server_id
+        self.config["last_manual_send"]["channel_id"] = channel_id
+        self.save_config()
+    
+    # Model Management
+    def get_selected_model(self) -> str:
+        """Get the selected AI model"""
+        return self.config.get("openai", {}).get("model", "gpt-3.5-turbo")
+    
+    def set_selected_model(self, model: str) -> None:
+        """Set the selected AI model"""
+        if "openai" not in self.config:
+            self.config["openai"] = {}
+        self.config["openai"]["model"] = model
+        self.save_config()
+    
+    def get_available_models(self) -> list:
+        """Get cached list of available models"""
+        return self.config.get("openai", {}).get("available_models", [])
 
 
 class AIResponseHandler:
@@ -257,11 +291,33 @@ class AIResponseHandler:
         """Update client with new configuration"""
         self._initialize_client()
     
+    async def fetch_available_models(self) -> list:
+        """Fetch available models from the API"""
+        if not self.client:
+            return []
+        
+        try:
+            models_response = await asyncio.to_thread(
+                self.client.models.list
+            )
+            models = [model.id for model in models_response.data]
+            
+            # Cache the models in config
+            if "openai" not in self.config_manager.config:
+                self.config_manager.config["openai"] = {}
+            self.config_manager.config["openai"]["available_models"] = models
+            self.config_manager.save_config()
+            
+            return models
+        except Exception as e:
+            print(f"Error fetching models: {str(e)}")
+            return []
+    
     async def get_ai_response(
         self, 
         message: str, 
         character_name: Optional[str] = None,
-        model: str = "gpt-3.5-turbo",
+        model: Optional[str] = None,
         preset_override: Optional[Dict[str, Any]] = None,
         additional_context: Optional[list] = None
     ) -> str:
@@ -271,7 +327,7 @@ class AIResponseHandler:
         Args:
             message: The user message
             character_name: Name of the character to use
-            model: The model to use for generation
+            model: The model to use for generation (if None, uses selected model from config)
             preset_override: Override preset configuration
             additional_context: Additional message history context
             
@@ -280,6 +336,10 @@ class AIResponseHandler:
         """
         if not self.client:
             return "Error: OpenAI API not configured. Please set BASE URL and API KEY."
+        
+        # Use selected model from config if not specified
+        if model is None:
+            model = self.config_manager.get_selected_model()
         
         # Get active preset or use override
         preset = preset_override or self.config_manager.get_active_preset()

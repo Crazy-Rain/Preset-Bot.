@@ -84,6 +84,15 @@ class PresetBotGUI:
         self.openai_api_key_entry = ttk.Entry(openai_frame, width=50, show="*")
         self.openai_api_key_entry.grid(row=1, column=1, pady=5, padx=5)
         
+        # Model Selection
+        ttk.Label(openai_frame, text="Model:").grid(row=2, column=0, sticky=tk.W, pady=5)
+        self.model_var = tk.StringVar()
+        self.model_dropdown = ttk.Combobox(openai_frame, textvariable=self.model_var, width=47)
+        self.model_dropdown.grid(row=2, column=1, pady=5, padx=5, sticky=tk.W)
+        
+        # Fetch Models button
+        ttk.Button(openai_frame, text="Fetch Models", command=self.fetch_models).grid(row=2, column=2, pady=5, padx=5)
+        
         # Buttons
         button_frame = ttk.Frame(self.config_frame)
         button_frame.pack(fill=tk.X, padx=10, pady=10)
@@ -233,6 +242,20 @@ class PresetBotGUI:
         self.openai_api_key_entry.delete(0, tk.END)
         self.openai_api_key_entry.insert(0, openai_config.get("api_key", ""))
         
+        # Model Selection
+        available_models = self.config_manager.get_available_models()
+        if available_models:
+            self.model_dropdown['values'] = available_models
+        selected_model = self.config_manager.get_selected_model()
+        self.model_var.set(selected_model)
+        
+        # Last Manual Send Target
+        last_target = self.config_manager.get_last_manual_send_target()
+        self.server_id_entry.delete(0, tk.END)
+        self.server_id_entry.insert(0, last_target.get("server_id", ""))
+        self.channel_id_entry.delete(0, tk.END)
+        self.channel_id_entry.insert(0, last_target.get("channel_id", ""))
+        
         self.config_status_label.config(text="Configuration loaded", foreground="green")
     
     def save_config(self):
@@ -249,6 +272,11 @@ class PresetBotGUI:
             if base_url and api_key:
                 self.config_manager.set_openai_config(base_url, api_key)
                 self.ai_handler.update_client()
+            
+            # Save selected model
+            model = self.model_var.get()
+            if model:
+                self.config_manager.set_selected_model(model)
             
             self.config_status_label.config(text="Configuration saved successfully!", foreground="green")
             messagebox.showinfo("Success", "Configuration saved successfully!")
@@ -289,8 +317,44 @@ class PresetBotGUI:
         
         threading.Thread(target=test, daemon=True).start()
     
+    def fetch_models(self):
+        """Fetch available models from API"""
+        self.config_status_label.config(text="Fetching models...", foreground="blue")
+        
+        def fetch():
+            try:
+                # Save current config first
+                base_url = self.openai_base_url_entry.get()
+                api_key = self.openai_api_key_entry.get()
+                if base_url and api_key:
+                    self.config_manager.set_openai_config(base_url, api_key)
+                    self.ai_handler.update_client()
+                
+                # Fetch models
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                models = loop.run_until_complete(
+                    self.ai_handler.fetch_available_models()
+                )
+                loop.close()
+                
+                if models:
+                    self.model_dropdown['values'] = models
+                    if models:
+                        self.model_var.set(models[0])
+                    self.config_status_label.config(text=f"Fetched {len(models)} models successfully!", foreground="green")
+                    messagebox.showinfo("Success", f"Fetched {len(models)} models from API")
+                else:
+                    self.config_status_label.config(text="No models found or error fetching", foreground="red")
+                    messagebox.showwarning("Warning", "No models found. Check your API configuration.")
+            except Exception as e:
+                self.config_status_label.config(text=f"Error: {str(e)}", foreground="red")
+                messagebox.showerror("Error", f"Failed to fetch models: {str(e)}")
+        
+        threading.Thread(target=fetch, daemon=True).start()
+    
     def send_manual_message(self):
-        """Send manual message through Discord bot using webhook"""
+        """Send manual message through Discord bot using webhook - sends message directly without AI processing"""
         server_id = self.server_id_entry.get()
         channel_id = self.channel_id_entry.get()
         character = self.character_var.get()
@@ -308,6 +372,9 @@ class PresetBotGUI:
             messagebox.showerror("Error", "Please select a character")
             return
         
+        # Save last used server and channel IDs
+        self.config_manager.set_last_manual_send_target(server_id, channel_id)
+        
         self.send_status_label.config(text="Sending message...", foreground="blue")
         
         def send():
@@ -319,14 +386,13 @@ class PresetBotGUI:
                     messagebox.showerror("Error", f"Character '{character}' not found")
                     return
                 
-                # Get AI response
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                ai_response = loop.run_until_complete(
-                    self.ai_handler.get_ai_response(message, character)
-                )
+                # Skip AI processing - send message directly
+                # The message is sent as-is from the selected character
                 
                 # Initialize Discord client if needed
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                
                 if not self.discord_client:
                     self.discord_client = discord.Client(intents=discord.Intents.default())
                     
@@ -335,8 +401,8 @@ class PresetBotGUI:
                         try:
                             channel = self.discord_client.get_channel(int(channel_id))
                             if channel:
-                                # Send via webhook
-                                await self.send_via_webhook(channel, ai_response, char_data)
+                                # Send via webhook - use the message directly without AI processing
+                                await self.send_via_webhook(channel, message, char_data)
                                 self.send_status_label.config(text=f"Message sent successfully!", foreground="green")
                                 messagebox.showinfo("Success", f"Message sent to channel {channel_id} as {char_data.get('display_name', character)}")
                             else:
