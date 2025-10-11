@@ -26,7 +26,8 @@ def test_new_character_structure():
         display_name="Tech Expert",
         description="You are a technical expert who provides detailed solutions.",
         avatar_url="https://example.com/avatar.png",
-        avatar_file=""
+        avatar_file="",
+        scenario="The user is seeking technical assistance with a complex problem."
     )
     
     # Verify it was added
@@ -40,12 +41,14 @@ def test_new_character_structure():
     assert tech_expert["display_name"] == "Tech Expert", "Display name mismatch"
     assert "technical expert" in tech_expert["description"], "Description mismatch"
     assert tech_expert["avatar_url"] == "https://example.com/avatar.png", "Avatar URL mismatch"
+    assert tech_expert.get("scenario", "") != "", "Scenario should be set"
     
     print("✓ Character created with all new fields")
     print(f"  Name: {tech_expert['name']}")
     print(f"  Display Name: {tech_expert['display_name']}")
     print(f"  Description: {tech_expert['description'][:50]}...")
     print(f"  Avatar URL: {tech_expert['avatar_url']}")
+    print(f"  Scenario: {tech_expert.get('scenario', '')[:50]}...")
     
     # Test update
     config_mgr.update_character(
@@ -54,7 +57,8 @@ def test_new_character_structure():
         display_name="Tech Expert Pro",
         description="Updated description",
         avatar_url="https://example.com/new-avatar.png",
-        avatar_file=""
+        avatar_file="",
+        scenario="Updated scenario for tech support."
     )
     
     tech_expert = config_mgr.get_character_by_name("tech_expert")
