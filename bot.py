@@ -1261,12 +1261,36 @@ class PresetBot(commands.Bot):
                     
                     @discord.ui.button(label="Show Description", style=discord.ButtonStyle.primary)
                     async def show_description(self, interaction: discord.Interaction, button: discord.ui.Button):
-                        desc_embed = discord.Embed(
-                            title=f"Description",
-                            description=self.description if self.description else "No description available.",
-                            color=discord.Color.blue()
-                        )
-                        await interaction.response.send_message(embed=desc_embed, ephemeral=True)
+                        description_text = self.description if self.description else "No description available."
+                        
+                        # Discord embed description limit is 4096 characters
+                        if len(description_text) <= 4096:
+                            desc_embed = discord.Embed(
+                                title=f"Description",
+                                description=description_text,
+                                color=discord.Color.blue()
+                            )
+                            await interaction.response.send_message(embed=desc_embed, ephemeral=True)
+                        else:
+                            # Split long descriptions into multiple embeds
+                            chunks = split_text_intelligently(description_text, max_chunk_size=4000)
+                            
+                            # Send first chunk as response
+                            first_embed = discord.Embed(
+                                title=f"Description (Part 1/{len(chunks)})",
+                                description=chunks[0],
+                                color=discord.Color.blue()
+                            )
+                            await interaction.response.send_message(embed=first_embed, ephemeral=True)
+                            
+                            # Send remaining chunks as follow-ups
+                            for i, chunk in enumerate(chunks[1:], start=2):
+                                follow_embed = discord.Embed(
+                                    title=f"Description (Part {i}/{len(chunks)})",
+                                    description=chunk,
+                                    color=discord.Color.blue()
+                                )
+                                await interaction.followup.send(embed=follow_embed, ephemeral=True)
                 
                 view = DescriptionView(user_char.get("description", ""))
                 await ctx.send(embed=embed, view=view)
@@ -1365,21 +1389,69 @@ class PresetBot(commands.Bot):
                     
                     @discord.ui.button(label="Show Description", style=discord.ButtonStyle.primary)
                     async def show_description(self, interaction: discord.Interaction, button: discord.ui.Button):
-                        desc_embed = discord.Embed(
-                            title=f"Description",
-                            description=self.description if self.description else "No description available.",
-                            color=discord.Color.blue()
-                        )
-                        await interaction.response.send_message(embed=desc_embed, ephemeral=True)
+                        description_text = self.description if self.description else "No description available."
+                        
+                        # Discord embed description limit is 4096 characters
+                        if len(description_text) <= 4096:
+                            desc_embed = discord.Embed(
+                                title=f"Description",
+                                description=description_text,
+                                color=discord.Color.blue()
+                            )
+                            await interaction.response.send_message(embed=desc_embed, ephemeral=True)
+                        else:
+                            # Split long descriptions into multiple embeds
+                            chunks = split_text_intelligently(description_text, max_chunk_size=4000)
+                            
+                            # Send first chunk as response
+                            first_embed = discord.Embed(
+                                title=f"Description (Part 1/{len(chunks)})",
+                                description=chunks[0],
+                                color=discord.Color.blue()
+                            )
+                            await interaction.response.send_message(embed=first_embed, ephemeral=True)
+                            
+                            # Send remaining chunks as follow-ups
+                            for i, chunk in enumerate(chunks[1:], start=2):
+                                follow_embed = discord.Embed(
+                                    title=f"Description (Part {i}/{len(chunks)})",
+                                    description=chunk,
+                                    color=discord.Color.blue()
+                                )
+                                await interaction.followup.send(embed=follow_embed, ephemeral=True)
                     
                     @discord.ui.button(label="Show Scenario", style=discord.ButtonStyle.secondary)
                     async def show_scenario(self, interaction: discord.Interaction, button: discord.ui.Button):
-                        scenario_embed = discord.Embed(
-                            title=f"Scenario",
-                            description=self.scenario if self.scenario else "No scenario available.",
-                            color=discord.Color.blue()
-                        )
-                        await interaction.response.send_message(embed=scenario_embed, ephemeral=True)
+                        scenario_text = self.scenario if self.scenario else "No scenario available."
+                        
+                        # Discord embed description limit is 4096 characters
+                        if len(scenario_text) <= 4096:
+                            scenario_embed = discord.Embed(
+                                title=f"Scenario",
+                                description=scenario_text,
+                                color=discord.Color.blue()
+                            )
+                            await interaction.response.send_message(embed=scenario_embed, ephemeral=True)
+                        else:
+                            # Split long scenarios into multiple embeds
+                            chunks = split_text_intelligently(scenario_text, max_chunk_size=4000)
+                            
+                            # Send first chunk as response
+                            first_embed = discord.Embed(
+                                title=f"Scenario (Part 1/{len(chunks)})",
+                                description=chunks[0],
+                                color=discord.Color.blue()
+                            )
+                            await interaction.response.send_message(embed=first_embed, ephemeral=True)
+                            
+                            # Send remaining chunks as follow-ups
+                            for i, chunk in enumerate(chunks[1:], start=2):
+                                follow_embed = discord.Embed(
+                                    title=f"Scenario (Part {i}/{len(chunks)})",
+                                    description=chunk,
+                                    color=discord.Color.blue()
+                                )
+                                await interaction.followup.send(embed=follow_embed, ephemeral=True)
                 
                 view = CharacterView(char.get("description", ""), char.get("scenario", ""))
                 await ctx.send(embed=embed, view=view)
