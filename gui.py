@@ -1649,19 +1649,19 @@ class PresetBotGUI:
                         messagebox.showinfo("Success", f"Avatar uploaded successfully!\nURL: {uploaded_url}")
                         
                         # Still copy locally as backup
-                        avatars_dir = "character_avatars"
+                        avatars_dir = "ucharacter_avatars"
                         os.makedirs(avatars_dir, exist_ok=True)
                         file_ext = os.path.splitext(avatar_file_source)[1]
-                        avatar_file_dest = os.path.join(avatars_dir, f"user_{name}{file_ext}")
+                        avatar_file_dest = os.path.join(avatars_dir, f"{name}{file_ext}")
                         shutil.copy2(avatar_file_source, avatar_file_dest)
                     else:
                         messagebox.showwarning("Upload Failed", "Failed to upload avatar to catbox.moe. The character will be created without an avatar URL.")
                 else:
                     # Just copy locally without uploading
-                    avatars_dir = "character_avatars"
+                    avatars_dir = "ucharacter_avatars"
                     os.makedirs(avatars_dir, exist_ok=True)
                     file_ext = os.path.splitext(avatar_file_source)[1]
-                    avatar_file_dest = os.path.join(avatars_dir, f"user_{name}{file_ext}")
+                    avatar_file_dest = os.path.join(avatars_dir, f"{name}{file_ext}")
                     shutil.copy2(avatar_file_source, avatar_file_dest)
             
             # Add character to config
@@ -1732,10 +1732,10 @@ class PresetBotGUI:
                             messagebox.showinfo("Success", f"Avatar uploaded successfully!\nURL: {uploaded_url}")
                             
                             # Still copy locally as backup
-                            avatars_dir = "character_avatars"
+                            avatars_dir = "ucharacter_avatars"
                             os.makedirs(avatars_dir, exist_ok=True)
                             file_ext = os.path.splitext(avatar_file_source)[1]
-                            avatar_file_dest = os.path.join(avatars_dir, f"user_{name}{file_ext}")
+                            avatar_file_dest = os.path.join(avatars_dir, f"{name}{file_ext}")
                             shutil.copy2(avatar_file_source, avatar_file_dest)
                         else:
                             messagebox.showwarning("Upload Failed", "Failed to upload avatar to catbox.moe. Keeping existing avatar URL.")
@@ -1749,10 +1749,10 @@ class PresetBotGUI:
                 else:
                     # Just copy locally without uploading
                     if avatar_file_source != current_avatar_file:
-                        avatars_dir = "character_avatars"
+                        avatars_dir = "ucharacter_avatars"
                         os.makedirs(avatars_dir, exist_ok=True)
                         file_ext = os.path.splitext(avatar_file_source)[1]
-                        avatar_file_dest = os.path.join(avatars_dir, f"user_{name}{file_ext}")
+                        avatar_file_dest = os.path.join(avatars_dir, f"{name}{file_ext}")
                         shutil.copy2(avatar_file_source, avatar_file_dest)
             
             # Update character in config

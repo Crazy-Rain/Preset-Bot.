@@ -1,14 +1,59 @@
 # New Commands Documentation
 
-This document describes the new commands added to the Preset Bot: `!viewu`, `!viewc`, and `!cimage`.
+This document describes the new commands added to the Preset Bot: `!set`, `!viewu`, `!viewc`, and `!cimage`.
 
 ## Overview
 
-Three new commands have been added to enhance the user experience:
+Four new commands have been added to enhance the user experience:
 
-1. **!viewu** - View your current user character (the one you're using in !chat)
-2. **!viewc** - View the current AI/Bot character for the channel
-3. **!cimage** - Update user character avatar images (similar to !image but for user characters)
+1. **!set** - Manually set your active user character
+2. **!viewu** - View your current user character (the one you're using in !chat)
+3. **!viewc** - View the current AI/Bot character for the channel
+4. **!cimage** - Update user character avatar images (similar to !image but for user characters)
+
+---
+
+## !set - Set Active User Character
+
+### Purpose
+Manually sets which user character you are currently playing as, without needing to use `!chat`. This is useful when you want to set your character before starting to chat, or change your character without sending a message.
+
+### Usage
+
+```
+!set <character_name>
+```
+
+### Examples
+
+```
+!set alice
+```
+*Sets your active user character to "alice"*
+
+```
+!set thorin
+```
+*Changes your active character to "thorin"*
+
+### What It Does
+
+- Sets your active user character for the current channel
+- This character will be shown when you use `!viewu`
+- The character will be used automatically when you use `!chat` without specifying a character
+- The setting persists until you use `!set` again or use `!chat` with a different character
+
+### Features
+
+- **No Chat Required**: Set your character without sending a chat message
+- **Instant**: Takes effect immediately
+- **Persistent**: Remains active until you change it
+- **Per-Channel**: Character setting is specific to each Discord channel
+- **Validation**: Checks that the character exists before setting it
+
+### Error Cases
+
+- If the character doesn't exist: "Error: User character 'name' not found. Use the GUI or create it first."
 
 ---
 
@@ -183,6 +228,29 @@ Updates the user character's avatar using the attached image
 ---
 
 ## Integration with Existing Commands
+
+### How !set Works with !viewu and !chat
+
+When you use `!set` to manually set your character:
+```
+!set alice
+```
+
+The bot:
+1. Records that you (your Discord User ID) are now using the character "alice"
+2. Stores this in the channel's chat history
+3. This character will be shown when you use `!viewu`
+4. This character will be used automatically when you use `!chat` without specifying a character
+
+When you later use `!chat` without a character name:
+```
+!chat "Hello!" waves
+```
+
+The bot:
+1. Looks for your last set character (from `!set` or previous `!chat`)
+2. Uses that character for your message
+3. You don't need to specify the character name each time
 
 ### How !viewu Works with !chat
 

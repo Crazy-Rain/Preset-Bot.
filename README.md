@@ -103,6 +103,7 @@ Available commands:
 - `!ask [character] <message>` - Ask the AI a question
 - `!chat [character]: <message>` - Chat with context tracking (NEW!)
 - `!clearchat` - Clear chat history for current channel (Admin only, NEW!)
+- `!set <character_name>` - Manually set your active user character (NEW!)
 - `!viewu [character_name]` - View your current user character (NEW!)
 - `!viewc [character_name]` - View current AI character for the channel (NEW!)
 - `!image <character> <url>` - Update AI character avatar

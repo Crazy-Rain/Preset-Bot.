@@ -1,5 +1,21 @@
 # Quick Reference: New Commands
 
+## !set - Set Your Active User Character
+
+**Set your character manually:**
+```
+!set alice
+```
+Sets your active user character to "alice" without sending a chat message.
+
+**What it does:**
+- Sets your active character for this channel
+- Character will be used when you use `!chat` without specifying a name
+- Shows up when you use `!viewu`
+- Persists until you change it
+
+---
+
 ## !viewu - View Your User Character
 
 **Without arguments** - View your current user character:
@@ -69,6 +85,7 @@ Shows information about the AI character named "narrator".
 
 | Command | Target | Purpose |
 |---------|--------|---------|
+| `!set` | User Characters | Set YOUR active character |
 | `!viewu` | User Characters | View YOUR character info |
 | `!viewc` | AI Characters | View CHANNEL's AI character |
 | `!cimage` | User Characters | Update user character avatar |
@@ -84,8 +101,23 @@ Shows information about the AI character named "narrator".
 ```
 1. Create character in GUI (User Characters tab)
 2. !cimage alice https://example.com/alice.png
-3. !chat alice: "Hello everyone!"
+3. !set alice  # Set your active character
 4. !viewu  # Confirm it worked
+5. !chat "Hello everyone!"  # Chat without specifying character name
+```
+
+### Alternative: Using !chat directly:
+```
+1. Create character in GUI (User Characters tab)
+2. !cimage alice https://example.com/alice.png
+3. !chat alice: "Hello everyone!"  # Sets character and sends message
+4. !viewu  # Confirm it worked
+```
+
+### Quickly switch characters:
+```
+!set bob  # Switch to bob without sending a message
+!viewu    # Verify you're now bob
 ```
 
 ### Check what character you're using:

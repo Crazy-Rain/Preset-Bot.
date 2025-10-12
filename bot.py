@@ -1274,6 +1274,41 @@ class PresetBot(commands.Bot):
             except Exception as e:
                 await ctx.send(f"Error: {str(e)}")
         
+        @self.command(name='set')
+        async def set_user_character(ctx, user_character_name: str):
+            """
+            Manually set your active user character
+            Usage: !set <character_name>
+            Example: !set alice
+            
+            This allows you to set your active user character without using !chat.
+            Your set character will be shown when you use !viewu.
+            """
+            try:
+                # Check if the user character exists
+                user_char = self.config_manager.get_user_character_by_name(user_character_name)
+                if not user_char:
+                    await ctx.send(f"Error: User character '{user_character_name}' not found. Use the GUI or create it first.")
+                    return
+                
+                # Store this as the user's active character by adding it to chat history
+                # This way it will be picked up by !viewu and !chat
+                channel_id = str(ctx.channel.id)
+                message_data = {
+                    "author": str(ctx.author.id),
+                    "author_name": str(ctx.author.name),
+                    "user_character": user_character_name,
+                    "content": f"[Set active character to {user_char.get('display_name', user_character_name)}]",
+                    "type": "system",  # Mark as system message so it doesn't interfere with chat
+                    "timestamp": ctx.message.created_at.isoformat()
+                }
+                self.config_manager.add_chat_message(channel_id, message_data)
+                
+                await ctx.send(f"✓ Your active user character is now '{user_char.get('display_name', user_character_name)}'. Use !viewu to confirm.")
+                
+            except Exception as e:
+                await ctx.send(f"Error: {str(e)}")
+        
         @self.command(name='viewc')
         async def viewc(ctx, character_name: Optional[str] = None):
             """
