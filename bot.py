@@ -1128,6 +1128,265 @@ class PresetBot(commands.Bot):
             except Exception as e:
                 await ctx.send(f"Error updating avatar: {str(e)}")
         
+        @self.command(name='cimage')
+        async def cimage(ctx, character_name: str, url: Optional[str] = None):
+            """
+            Update user character avatar image
+            Usage: !cimage <character_name> <url>
+            Or: !cimage <character_name> (with attached image)
+            Example: !cimage Alice https://example.com/avatar.png
+            """
+            try:
+                # Get user character
+                char = self.config_manager.get_user_character_by_name(character_name)
+                if not char:
+                    await ctx.send(f"Error: User character '{character_name}' not found.")
+                    return
+                
+                # Get user character index
+                user_characters = self.config_manager.get_user_characters()
+                char_index = None
+                for i, c in enumerate(user_characters):
+                    if c.get("name", "").lower() == character_name.lower():
+                        char_index = i
+                        break
+                
+                if char_index is None:
+                    await ctx.send(f"Error: Could not find user character index for '{character_name}'.")
+                    return
+                
+                # Check for attached image
+                image_url = url
+                if not image_url and ctx.message.attachments:
+                    # Use first attachment
+                    image_url = ctx.message.attachments[0].url
+                
+                if not image_url:
+                    await ctx.send("Error: Please provide either a URL or attach an image to the message.")
+                    return
+                
+                await ctx.send(f"Downloading image for '{character_name}'...")
+                
+                # Download the image
+                avatars_dir = "ucharacter_avatars"
+                os.makedirs(avatars_dir, exist_ok=True)
+                
+                # Determine file extension from URL
+                file_ext = ".png"  # default
+                if "." in image_url:
+                    url_ext = image_url.split(".")[-1].split("?")[0].lower()
+                    if url_ext in ["png", "jpg", "jpeg", "gif", "webp"]:
+                        file_ext = f".{url_ext}"
+                
+                avatar_file = os.path.join(avatars_dir, f"{character_name}{file_ext}")
+                
+                # Download image
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(image_url) as resp:
+                        if resp.status == 200:
+                            with open(avatar_file, 'wb') as f:
+                                f.write(await resp.read())
+                        else:
+                            await ctx.send(f"Error: Failed to download image (HTTP {resp.status}).")
+                            return
+                
+                # Update user character with new avatar file
+                self.config_manager.update_user_character(
+                    index=char_index,
+                    name=char.get("name"),
+                    display_name=char.get("display_name"),
+                    description=char.get("description", ""),
+                    avatar_url=image_url,
+                    avatar_file=avatar_file
+                )
+                
+                await ctx.send(f"✓ Avatar updated for user character '{char.get('display_name', character_name)}'!")
+            except Exception as e:
+                await ctx.send(f"Error updating avatar: {str(e)}")
+        
+        @self.command(name='viewu')
+        async def viewu(ctx, user_character_name: Optional[str] = None):
+            """
+            View your current user character (the one you're using in !chat)
+            Usage: !viewu
+            Or: !viewu <character_name> to view a specific user character
+            """
+            try:
+                # If a specific character name is provided, show that character
+                if user_character_name:
+                    user_char = self.config_manager.get_user_character_by_name(user_character_name)
+                    if not user_char:
+                        await ctx.send(f"Error: User character '{user_character_name}' not found.")
+                        return
+                else:
+                    # Find the user's active character by looking through chat history
+                    channel_id = str(ctx.channel.id)
+                    chat_history = self.config_manager.get_chat_history(channel_id)
+                    history_limit = self.config_manager.get_chat_history_limit()
+                    
+                    active_user_character = None
+                    # Look through recent history for this user's character
+                    for msg in reversed(chat_history[-history_limit:]):
+                        if msg.get("user_character") and msg.get("author") == str(ctx.author.id):
+                            active_user_character = msg.get("user_character")
+                            break
+                    
+                    if not active_user_character:
+                        await ctx.send("You haven't used a user character in !chat yet in this channel.")
+                        return
+                    
+                    user_char = self.config_manager.get_user_character_by_name(active_user_character)
+                    if not user_char:
+                        await ctx.send(f"Error: Your active user character '{active_user_character}' was not found in the config.")
+                        return
+                
+                # Create an embed to display the character info
+                embed = discord.Embed(
+                    title=f"User Character: {user_char.get('display_name', user_char.get('name', 'Unknown'))}",
+                    color=discord.Color.green()
+                )
+                
+                embed.add_field(name="Character ID", value=user_char.get("name", "Unknown"), inline=False)
+                
+                # Add avatar if available
+                avatar_url = user_char.get("avatar_url", "")
+                if avatar_url:
+                    embed.set_thumbnail(url=avatar_url)
+                
+                # Create a view with a button to show description
+                class DescriptionView(discord.ui.View):
+                    def __init__(self, description):
+                        super().__init__(timeout=300)  # 5 minute timeout
+                        self.description = description
+                    
+                    @discord.ui.button(label="Show Description", style=discord.ButtonStyle.primary)
+                    async def show_description(self, interaction: discord.Interaction, button: discord.ui.Button):
+                        desc_embed = discord.Embed(
+                            title=f"Description",
+                            description=self.description if self.description else "No description available.",
+                            color=discord.Color.blue()
+                        )
+                        await interaction.response.send_message(embed=desc_embed, ephemeral=True)
+                
+                view = DescriptionView(user_char.get("description", ""))
+                await ctx.send(embed=embed, view=view)
+                
+            except Exception as e:
+                await ctx.send(f"Error: {str(e)}")
+        
+        @self.command(name='set')
+        async def set_user_character(ctx, user_character_name: str):
+            """
+            Manually set your active user character
+            Usage: !set <character_name>
+            Example: !set alice
+            
+            This allows you to set your active user character without using !chat.
+            Your set character will be shown when you use !viewu.
+            """
+            try:
+                # Check if the user character exists
+                user_char = self.config_manager.get_user_character_by_name(user_character_name)
+                if not user_char:
+                    await ctx.send(f"Error: User character '{user_character_name}' not found. Use the GUI or create it first.")
+                    return
+                
+                # Store this as the user's active character by adding it to chat history
+                # This way it will be picked up by !viewu and !chat
+                channel_id = str(ctx.channel.id)
+                message_data = {
+                    "author": str(ctx.author.id),
+                    "author_name": str(ctx.author.name),
+                    "user_character": user_character_name,
+                    "content": f"[Set active character to {user_char.get('display_name', user_character_name)}]",
+                    "type": "system",  # Mark as system message so it doesn't interfere with chat
+                    "timestamp": ctx.message.created_at.isoformat()
+                }
+                self.config_manager.add_chat_message(channel_id, message_data)
+                
+                await ctx.send(f"✓ Your active user character is now '{user_char.get('display_name', user_character_name)}'. Use !viewu to confirm.")
+                
+            except Exception as e:
+                await ctx.send(f"Error: {str(e)}")
+        
+        @self.command(name='viewc')
+        async def viewc(ctx, character_name: Optional[str] = None):
+            """
+            View the current AI/Bot character for this channel
+            Usage: !viewc
+            Or: !viewc <character_name> to view a specific character
+            """
+            try:
+                # If a specific character name is provided, show that character
+                if character_name:
+                    char = self.config_manager.get_character_by_name(character_name)
+                    if not char:
+                        await ctx.send(f"Error: Character '{character_name}' not found.")
+                        return
+                else:
+                    # Get the channel's active character
+                    channel_id = str(ctx.channel.id)
+                    ai_character_name = self.config_manager.get_channel_character(channel_id)
+                    
+                    if not ai_character_name:
+                        # Use default character (first one)
+                        characters = self.config_manager.get_characters()
+                        if characters:
+                            char = characters[0]
+                            await ctx.send(f"No character set for this channel. Showing default character:")
+                        else:
+                            await ctx.send("No characters configured.")
+                            return
+                    else:
+                        char = self.config_manager.get_character_by_name(ai_character_name)
+                        if not char:
+                            await ctx.send(f"Error: Channel character '{ai_character_name}' was not found in the config.")
+                            return
+                
+                # Create an embed to display the character info
+                embed = discord.Embed(
+                    title=f"AI Character: {char.get('display_name', char.get('name', 'Unknown'))}",
+                    color=discord.Color.blue()
+                )
+                
+                embed.add_field(name="Character ID", value=char.get("name", "Unknown"), inline=False)
+                
+                # Add avatar if available
+                avatar_url = char.get("avatar_url", "")
+                if avatar_url:
+                    embed.set_thumbnail(url=avatar_url)
+                
+                # Create a view with buttons to show description and scenario
+                class CharacterView(discord.ui.View):
+                    def __init__(self, description, scenario):
+                        super().__init__(timeout=300)  # 5 minute timeout
+                        self.description = description
+                        self.scenario = scenario
+                    
+                    @discord.ui.button(label="Show Description", style=discord.ButtonStyle.primary)
+                    async def show_description(self, interaction: discord.Interaction, button: discord.ui.Button):
+                        desc_embed = discord.Embed(
+                            title=f"Description",
+                            description=self.description if self.description else "No description available.",
+                            color=discord.Color.blue()
+                        )
+                        await interaction.response.send_message(embed=desc_embed, ephemeral=True)
+                    
+                    @discord.ui.button(label="Show Scenario", style=discord.ButtonStyle.secondary)
+                    async def show_scenario(self, interaction: discord.Interaction, button: discord.ui.Button):
+                        scenario_embed = discord.Embed(
+                            title=f"Scenario",
+                            description=self.scenario if self.scenario else "No scenario available.",
+                            color=discord.Color.blue()
+                        )
+                        await interaction.response.send_message(embed=scenario_embed, ephemeral=True)
+                
+                view = CharacterView(char.get("description", ""), char.get("scenario", ""))
+                await ctx.send(embed=embed, view=view)
+                
+            except Exception as e:
+                await ctx.send(f"Error: {str(e)}")
+        
         @self.command(name='lorebook')
         async def lorebook(ctx, action: str, *args):
             """

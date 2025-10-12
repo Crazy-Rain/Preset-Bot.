@@ -42,3 +42,7 @@ Thumbs.db
 # Character avatars (user uploads)
 character_avatars/*
 !character_avatars/.gitkeep
+
+# User character avatars (user uploads)
+ucharacter_avatars/*
+!ucharacter_avatars/.gitkeep
