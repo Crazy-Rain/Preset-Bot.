@@ -701,6 +701,9 @@ class AIResponseHandler:
         if not self.client:
             return "Error: OpenAI API not configured. Please set BASE URL and API KEY."
         
+        # Reload config to get latest lorebook/character updates from GUI or other sources
+        self.config_manager.reload_config()
+        
         # Use selected model from config if not specified
         if model is None:
             model = self.config_manager.get_selected_model()
@@ -1560,6 +1563,9 @@ class PresetBot(commands.Bot):
                 - Add entry (keywords only for normal type, use quotes for multi-word content)
               !lorebook delentry <lorebook_name> <entry_index> - Delete entry by index
             """
+            # Reload config to get latest lorebook updates from GUI
+            self.config_manager.reload_config()
+            
             action = action.lower()
             
             if action == "create":
