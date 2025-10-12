@@ -1904,6 +1904,12 @@ class PresetBotGUI:
                                                   font=('TkDefaultFont', 10, 'bold'))
         self.selected_lorebook_label.pack(pady=5)
         
+        # Active status indicator for selected lorebook
+        self.lorebook_status_label = tk.Label(entry_mgmt_frame, text="", 
+                                               font=('TkDefaultFont', 9, 'bold'),
+                                               relief=tk.RIDGE, padx=10, pady=5)
+        self.lorebook_status_label.pack(pady=5)
+        
         # Add/Edit Entry section
         entry_edit_frame = ttk.LabelFrame(entry_mgmt_frame, text="Add/Edit Entry", padding=10)
         entry_edit_frame.pack(fill=tk.X, pady=5)
@@ -2354,25 +2360,56 @@ class PresetBotGUI:
             update_entry_preview()
     
     def refresh_lorebooks_list(self):
-        """Refresh the lorebooks list"""
+        """Refresh the lorebooks list with color-coded active/inactive states"""
         self.lorebooks_listbox.delete(0, tk.END)
         lorebooks = self.config_manager.get_lorebooks()
-        for lb in lorebooks:
+        
+        for i, lb in enumerate(lorebooks):
             name = lb.get("name", "Unknown")
-            active = "✓" if lb.get("active", False) else "✗"
+            is_active = lb.get("active", False)
+            active_status = "✓ ACTIVE" if is_active else "✗ INACTIVE"
             entry_count = len(lb.get("entries", []))
-            self.lorebooks_listbox.insert(tk.END, f"{active} {name} ({entry_count} entries)")
+            
+            # Create display text with clear status
+            display_text = f"{active_status} | {name} ({entry_count} entries)"
+            self.lorebooks_listbox.insert(tk.END, display_text)
+            
+            # Color code based on active status for better visibility
+            if is_active:
+                self.lorebooks_listbox.itemconfig(i, fg='green', selectforeground='white')
+            else:
+                self.lorebooks_listbox.itemconfig(i, fg='gray', selectforeground='white')
     
     def on_lorebook_select(self, event):
-        """Handle lorebook selection"""
+        """Handle lorebook selection and update status display"""
         selection = self.lorebooks_listbox.curselection()
         if selection:
             index = selection[0]
             lorebooks = self.config_manager.get_lorebooks()
             if index < len(lorebooks):
-                self.current_lorebook = lorebooks[index]['name']
+                lorebook = lorebooks[index]
+                self.current_lorebook = lorebook['name']
                 self.selected_lorebook_label.config(text=f"Selected: {self.current_lorebook}")
+                
+                # Update status indicator with color coding
+                is_active = lorebook.get('active', False)
+                if is_active:
+                    self.lorebook_status_label.config(
+                        text="STATUS: ACTIVE ✓",
+                        bg='#90EE90',  # Light green
+                        fg='#006400'   # Dark green
+                    )
+                else:
+                    self.lorebook_status_label.config(
+                        text="STATUS: INACTIVE ✗",
+                        bg='#FFB6C1',  # Light red/pink
+                        fg='#8B0000'   # Dark red
+                    )
+                
                 self.refresh_entries_list()
+        else:
+            # No selection
+            self.lorebook_status_label.config(text="", bg=self.root.cget('bg'))
     
     def add_entry(self):
         """Add a new entry to the selected lorebook"""
