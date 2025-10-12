@@ -1888,6 +1888,7 @@ class PresetBotGUI:
         ttk.Button(lb_button_frame, text="Activate", command=self.activate_lorebook).pack(side=tk.LEFT, padx=5)
         ttk.Button(lb_button_frame, text="Deactivate", command=self.deactivate_lorebook).pack(side=tk.LEFT, padx=5)
         ttk.Button(lb_button_frame, text="Delete", command=self.delete_lorebook).pack(side=tk.LEFT, padx=5)
+        ttk.Button(lb_button_frame, text="Import...", command=self.import_lorebook).pack(side=tk.LEFT, padx=5)
         ttk.Button(lb_button_frame, text="Refresh", command=self.refresh_lorebooks_list).pack(side=tk.LEFT, padx=5)
         
         # Right panel - Entry management
@@ -2037,6 +2038,320 @@ class PresetBotGUI:
                 self.refresh_lorebooks_list()
                 self.refresh_entries_list()
                 messagebox.showinfo("Success", f"Lorebook '{name}' deleted")
+    
+    def import_lorebook(self):
+        """Import a lorebook from a JSON file"""
+        # Browse for lorebook file
+        filename = filedialog.askopenfilename(
+            title="Select Lorebook JSON File",
+            filetypes=[
+                ("JSON files", "*.json"),
+                ("All files", "*.*")
+            ]
+        )
+        
+        if not filename:
+            return
+        
+        try:
+            # Load and validate the lorebook file
+            with open(filename, 'r') as f:
+                imported_data = json.load(f)
+            
+            # Validate structure - lorebooks can have various structures
+            # We'll support both single lorebook and array of lorebooks
+            lorebooks_to_import = []
+            
+            if isinstance(imported_data, dict):
+                # Single lorebook format
+                if "entries" in imported_data:
+                    lorebooks_to_import.append(imported_data)
+                # Config file format with lorebooks array
+                elif "lorebooks" in imported_data:
+                    lorebooks_to_import = imported_data["lorebooks"]
+                else:
+                    messagebox.showerror("Error", "Invalid lorebook format: missing 'entries' or 'lorebooks' field")
+                    return
+            elif isinstance(imported_data, list):
+                # Array of lorebooks
+                lorebooks_to_import = imported_data
+            else:
+                messagebox.showerror("Error", "Invalid lorebook format: expected object or array")
+                return
+            
+            if not lorebooks_to_import:
+                messagebox.showwarning("Warning", "No lorebooks found in the file")
+                return
+            
+            # Show import preview dialog
+            self.show_import_preview(lorebooks_to_import, filename)
+            
+        except json.JSONDecodeError as e:
+            messagebox.showerror("Error", f"Invalid JSON file: {str(e)}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load lorebook: {str(e)}")
+    
+    def show_import_preview(self, lorebooks_data, source_filename):
+        """Show preview dialog for importing lorebook entries"""
+        # Create dialog window
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Import Lorebook")
+        dialog.geometry("900x600")
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        # Header
+        header_frame = ttk.Frame(dialog)
+        header_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        ttk.Label(header_frame, text=f"Importing from: {os.path.basename(source_filename)}", 
+                 font=('TkDefaultFont', 10, 'bold')).pack(anchor=tk.W)
+        ttk.Label(header_frame, text=f"Found {len(lorebooks_data)} lorebook(s) to import",
+                 font=('TkDefaultFont', 9)).pack(anchor=tk.W)
+        
+        # Main content area with paned window
+        main_paned = ttk.PanedWindow(dialog, orient=tk.HORIZONTAL)
+        main_paned.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        
+        # Left panel - Lorebook selection
+        left_frame = ttk.LabelFrame(main_paned, text="Select Lorebook to Import", padding=10)
+        main_paned.add(left_frame, weight=1)
+        
+        # Lorebook listbox
+        lb_list_frame = ttk.Frame(left_frame)
+        lb_list_frame.pack(fill=tk.BOTH, expand=True)
+        
+        lb_scrollbar = ttk.Scrollbar(lb_list_frame)
+        lb_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        lorebook_listbox = tk.Listbox(lb_list_frame, yscrollcommand=lb_scrollbar.set)
+        lorebook_listbox.pack(fill=tk.BOTH, expand=True, side=tk.LEFT)
+        lb_scrollbar.config(command=lorebook_listbox.yview)
+        
+        # Populate lorebook list
+        for lb in lorebooks_data:
+            name = lb.get("name", "Unnamed")
+            entry_count = len(lb.get("entries", []))
+            lorebook_listbox.insert(tk.END, f"{name} ({entry_count} entries)")
+        
+        # Right panel - Entry preview
+        right_frame = ttk.LabelFrame(main_paned, text="Entry Preview", padding=10)
+        main_paned.add(right_frame, weight=2)
+        
+        # Selected lorebook info
+        selected_lb_label = ttk.Label(right_frame, text="Select a lorebook to preview entries",
+                                      font=('TkDefaultFont', 9, 'italic'))
+        selected_lb_label.pack(pady=5)
+        
+        # Filter options
+        filter_frame = ttk.LabelFrame(right_frame, text="Filter Entries", padding=5)
+        filter_frame.pack(fill=tk.X, pady=5)
+        
+        filter_var = tk.StringVar(value="all")
+        ttk.Radiobutton(filter_frame, text="All Entries", variable=filter_var, 
+                       value="all").pack(side=tk.LEFT, padx=5)
+        ttk.Radiobutton(filter_frame, text="Constant Only", variable=filter_var,
+                       value="constant").pack(side=tk.LEFT, padx=5)
+        ttk.Radiobutton(filter_frame, text="Normal Only", variable=filter_var,
+                       value="normal").pack(side=tk.LEFT, padx=5)
+        
+        # Entry list with checkboxes
+        entry_list_frame = ttk.Frame(right_frame)
+        entry_list_frame.pack(fill=tk.BOTH, expand=True, pady=5)
+        
+        entry_scrollbar = ttk.Scrollbar(entry_list_frame)
+        entry_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        entry_tree = ttk.Treeview(entry_list_frame, columns=("Type", "Content", "Keywords"),
+                                  show="tree headings", yscrollcommand=entry_scrollbar.set)
+        entry_tree.pack(fill=tk.BOTH, expand=True, side=tk.LEFT)
+        entry_scrollbar.config(command=entry_tree.yview)
+        
+        # Configure columns
+        entry_tree.heading("#0", text="Import")
+        entry_tree.heading("Type", text="Type")
+        entry_tree.heading("Content", text="Content")
+        entry_tree.heading("Keywords", text="Keywords")
+        
+        entry_tree.column("#0", width=60, stretch=False)
+        entry_tree.column("Type", width=80, stretch=False)
+        entry_tree.column("Content", width=400)
+        entry_tree.column("Keywords", width=200)
+        
+        # Store entry data and selection state
+        entry_data = []
+        selected_entries = {}
+        
+        def update_entry_preview():
+            """Update entry preview based on selected lorebook and filter"""
+            entry_tree.delete(*entry_tree.get_children())
+            entry_data.clear()
+            selected_entries.clear()
+            
+            selection = lorebook_listbox.curselection()
+            if not selection:
+                selected_lb_label.config(text="Select a lorebook to preview entries")
+                return
+            
+            idx = selection[0]
+            lorebook = lorebooks_data[idx]
+            name = lorebook.get("name", "Unnamed")
+            entries = lorebook.get("entries", [])
+            
+            selected_lb_label.config(text=f"Lorebook: {name} - {len(entries)} total entries")
+            
+            filter_type = filter_var.get()
+            
+            for i, entry in enumerate(entries):
+                entry_type = entry.get("insertion_type", "normal")
+                
+                # Apply filter
+                if filter_type == "constant" and entry_type != "constant":
+                    continue
+                elif filter_type == "normal" and entry_type != "normal":
+                    continue
+                
+                content = entry.get("content", "")
+                content_preview = content[:60] + "..." if len(content) > 60 else content
+                keywords = entry.get("keywords", [])
+                keywords_str = ", ".join(keywords) if keywords else "-"
+                
+                # Add to tree with checkbox
+                item_id = entry_tree.insert("", tk.END, text="☑", 
+                                           values=(entry_type.upper(), content_preview, keywords_str))
+                entry_data.append((item_id, entry))
+                selected_entries[item_id] = True
+        
+        def toggle_entry(event):
+            """Toggle entry selection on click"""
+            item = entry_tree.identify('item', event.x, event.y)
+            if item:
+                current = selected_entries.get(item, False)
+                selected_entries[item] = not current
+                entry_tree.item(item, text="☑" if selected_entries[item] else "☐")
+        
+        # Bind events
+        lorebook_listbox.bind('<<ListboxSelect>>', lambda e: update_entry_preview())
+        filter_var.trace('w', lambda *args: update_entry_preview())
+        entry_tree.bind('<Button-1>', toggle_entry)
+        
+        # Select/Deselect all buttons
+        select_frame = ttk.Frame(right_frame)
+        select_frame.pack(fill=tk.X, pady=5)
+        
+        def select_all():
+            for item in entry_tree.get_children():
+                selected_entries[item] = True
+                entry_tree.item(item, text="☑")
+        
+        def deselect_all():
+            for item in entry_tree.get_children():
+                selected_entries[item] = False
+                entry_tree.item(item, text="☐")
+        
+        ttk.Button(select_frame, text="Select All", command=select_all).pack(side=tk.LEFT, padx=5)
+        ttk.Button(select_frame, text="Deselect All", command=deselect_all).pack(side=tk.LEFT, padx=5)
+        
+        # Target lorebook selection
+        target_frame = ttk.LabelFrame(dialog, text="Import Destination", padding=10)
+        target_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        ttk.Label(target_frame, text="Import entries to:").pack(side=tk.LEFT, padx=5)
+        
+        import_mode_var = tk.StringVar(value="existing")
+        ttk.Radiobutton(target_frame, text="Selected Lorebook", variable=import_mode_var,
+                       value="existing").pack(side=tk.LEFT, padx=5)
+        ttk.Radiobutton(target_frame, text="New Lorebook", variable=import_mode_var,
+                       value="new").pack(side=tk.LEFT, padx=5)
+        
+        new_name_entry = ttk.Entry(target_frame, width=25)
+        new_name_entry.pack(side=tk.LEFT, padx=5)
+        new_name_entry.insert(0, "imported_lorebook")
+        
+        def update_target_options():
+            if import_mode_var.get() == "existing":
+                new_name_entry.config(state='disabled')
+            else:
+                new_name_entry.config(state='normal')
+        
+        import_mode_var.trace('w', lambda *args: update_target_options())
+        update_target_options()
+        
+        # Bottom buttons
+        button_frame = ttk.Frame(dialog)
+        button_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        def do_import():
+            """Perform the import"""
+            selection = lorebook_listbox.curselection()
+            if not selection:
+                messagebox.showwarning("Warning", "Please select a lorebook to import")
+                return
+            
+            # Get selected entries
+            entries_to_import = []
+            for item_id, entry in entry_data:
+                if selected_entries.get(item_id, False):
+                    entries_to_import.append(entry)
+            
+            if not entries_to_import:
+                messagebox.showwarning("Warning", "No entries selected for import")
+                return
+            
+            # Determine target lorebook
+            target_lorebook_name = None
+            
+            if import_mode_var.get() == "existing":
+                if not self.current_lorebook:
+                    messagebox.showwarning("Warning", "Please select a lorebook in the main window first")
+                    return
+                target_lorebook_name = self.current_lorebook
+            else:
+                # Create new lorebook
+                new_name = new_name_entry.get().strip()
+                if not new_name:
+                    messagebox.showwarning("Warning", "Please enter a name for the new lorebook")
+                    return
+                
+                # Check if name already exists
+                if self.config_manager.get_lorebook_by_name(new_name):
+                    messagebox.showerror("Error", f"Lorebook '{new_name}' already exists")
+                    return
+                
+                self.config_manager.add_lorebook(new_name, active=True)
+                target_lorebook_name = new_name
+            
+            # Import entries
+            success_count = 0
+            for entry in entries_to_import:
+                content = entry.get("content", "")
+                insertion_type = entry.get("insertion_type", "normal")
+                keywords = entry.get("keywords", [])
+                
+                if self.config_manager.add_lorebook_entry(
+                    target_lorebook_name, content, insertion_type, keywords
+                ):
+                    success_count += 1
+            
+            # Update UI
+            self.refresh_lorebooks_list()
+            self.current_lorebook = target_lorebook_name
+            self.selected_lorebook_label.config(text=f"Selected: {target_lorebook_name}")
+            self.refresh_entries_list()
+            
+            # Show success message
+            messagebox.showinfo("Success", 
+                f"Imported {success_count} of {len(entries_to_import)} entries to '{target_lorebook_name}'")
+            
+            dialog.destroy()
+        
+        ttk.Button(button_frame, text="Import", command=do_import).pack(side=tk.RIGHT, padx=5)
+        ttk.Button(button_frame, text="Cancel", command=dialog.destroy).pack(side=tk.RIGHT, padx=5)
+        
+        # Auto-select first lorebook if only one
+        if len(lorebooks_data) == 1:
+            lorebook_listbox.selection_set(0)
+            update_entry_preview()
     
     def refresh_lorebooks_list(self):
         """Refresh the lorebooks list"""
