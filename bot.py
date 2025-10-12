@@ -534,8 +534,16 @@ class ConfigManager:
         message_lower = message.lower()
         
         for lorebook in self.get_lorebooks():
-            if not lorebook.get("active", False):
+            lorebook_name = lorebook.get("name", "Unknown")
+            is_active = lorebook.get("active", False)
+            
+            if not is_active:
+                # Skip inactive lorebooks - they should not contribute any entries
+                print(f"[Lorebook] Skipping '{lorebook_name}' - INACTIVE")
                 continue
+            
+            print(f"[Lorebook] Processing '{lorebook_name}' - ACTIVE")
+            entry_count_before = len(entries)
             
             for entry in lorebook.get("entries", []):
                 insertion_type = entry.get("insertion_type", "normal")
@@ -550,6 +558,9 @@ class ConfigManager:
                         if keyword.lower() in message_lower:
                             entries.append(entry.get("content", ""))
                             break  # Don't add the same entry multiple times
+            
+            entries_added = len(entries) - entry_count_before
+            print(f"[Lorebook] Added {entries_added} entries from '{lorebook_name}'")
         
         return entries
 
