@@ -103,6 +103,10 @@ Available commands:
 - `!ask [character] <message>` - Ask the AI a question
 - `!chat [character]: <message>` - Chat with context tracking (NEW!)
 - `!clearchat` - Clear chat history for current channel (Admin only, NEW!)
+- `!viewu [character_name]` - View your current user character (NEW!)
+- `!viewc [character_name]` - View current AI character for the channel (NEW!)
+- `!image <character> <url>` - Update AI character avatar
+- `!cimage <character> <url>` - Update user character avatar (NEW!)
 - `!lorebook <action> [args]` - Manage lorebooks (NEW!)
   - `create <name>` - Create a new lorebook
   - `list` - List all lorebooks
@@ -173,6 +177,7 @@ For detailed information about the new features, see:
 - **[PRESET_FEATURES.md](PRESET_FEATURES.md)** - Comprehensive guide to presets, user characters, and chat system
 - **[LOREBOOK_GUIDE.md](LOREBOOK_GUIDE.md)** - Complete lorebook documentation with examples
 - **[LOREBOOK_QUICK_REFERENCE.md](LOREBOOK_QUICK_REFERENCE.md)** - Quick command reference for lorebooks
+- **[NEW_COMMANDS_GUIDE.md](NEW_COMMANDS_GUIDE.md)** - Guide for !viewu, !viewc, and !cimage commands (NEW!)
 
 ## Security Notes
 - `config.json` is excluded from version control (.gitignore)
