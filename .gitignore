@@ -1,6 +1,10 @@
 # Configuration files with sensitive data
 config.json
 
+# Test files
+test_*config*.json
+sample_*.json
+
 # Python
 __pycache__/
 *.py[cod]

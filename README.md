@@ -37,6 +37,7 @@ This is a Discord bot with AI response capabilities and manual send features. Th
 - Active/Inactive toggle per lorebook
 - **Constant entries**: Always included in AI context
 - **Normal entries**: Triggered by keywords in messages
+- **Bulk Import**: Import lorebook entries from JSON files (NEW!)
 - Perfect for world-building, character lore, and campaign tracking
 - Similar to SillyTavern's lorebook functionality
 
@@ -86,6 +87,7 @@ The GUI provides five tabs:
 3. **Manual Send**: Send messages to Discord channels with AI responses
 4. **Characters**: Manage AI character personalities
 5. **User Characters**: Manage user/player character profiles for chat
+6. **Lorebooks**: Create and manage lorebooks, import from JSON files (NEW!)
 
 ### Bot Mode
 Run the Discord bot with commands:
@@ -177,6 +179,7 @@ Preset-Bot./
 For detailed information about the new features, see:
 - **[PRESET_FEATURES.md](PRESET_FEATURES.md)** - Comprehensive guide to presets, user characters, and chat system
 - **[LOREBOOK_GUIDE.md](LOREBOOK_GUIDE.md)** - Complete lorebook documentation with examples
+- **[LOREBOOK_IMPORTER_GUIDE.md](LOREBOOK_IMPORTER_GUIDE.md)** - Guide to bulk importing lorebook entries (NEW!)
 - **[LOREBOOK_QUICK_REFERENCE.md](LOREBOOK_QUICK_REFERENCE.md)** - Quick command reference for lorebooks
 - **[NEW_COMMANDS_GUIDE.md](NEW_COMMANDS_GUIDE.md)** - Guide for !viewu, !viewc, and !cimage commands (NEW!)
 
