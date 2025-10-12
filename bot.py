@@ -1268,6 +1268,7 @@ class PresetBot(commands.Bot):
                         # Send avatar image first if available
                         if self.avatar_url or (self.avatar_file and os.path.exists(self.avatar_file)):
                             avatar_embed = discord.Embed(
+                                title="Avatar",
                                 color=discord.Color.blue()
                             )
                             
@@ -1438,6 +1439,7 @@ class PresetBot(commands.Bot):
                         # Send avatar image first if available
                         if self.avatar_url or (self.avatar_file and os.path.exists(self.avatar_file)):
                             avatar_embed = discord.Embed(
+                                title="Avatar",
                                 color=discord.Color.blue()
                             )
                             
