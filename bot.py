@@ -701,6 +701,9 @@ class AIResponseHandler:
         if not self.client:
             return "Error: OpenAI API not configured. Please set BASE URL and API KEY."
         
+        # Reload config to get latest lorebook/character updates from GUI or other sources
+        self.config_manager.reload_config()
+        
         # Use selected model from config if not specified
         if model is None:
             model = self.config_manager.get_selected_model()
