@@ -1255,14 +1255,41 @@ class PresetBot(commands.Bot):
                 
                 # Create a view with a button to show description
                 class DescriptionView(discord.ui.View):
-                    def __init__(self, description):
+                    def __init__(self, description, avatar_url, avatar_file):
                         super().__init__(timeout=300)  # 5 minute timeout
                         self.description = description
+                        self.avatar_url = avatar_url
+                        self.avatar_file = avatar_file
                     
                     @discord.ui.button(label="Show Description", style=discord.ButtonStyle.primary)
                     async def show_description(self, interaction: discord.Interaction, button: discord.ui.Button):
                         description_text = self.description if self.description else "No description available."
                         
+                        # Send avatar image first if available
+                        if self.avatar_url or (self.avatar_file and os.path.exists(self.avatar_file)):
+                            avatar_embed = discord.Embed(
+                                color=discord.Color.blue()
+                            )
+                            
+                            # Set the image in the embed
+                            if self.avatar_url:
+                                avatar_embed.set_image(url=self.avatar_url)
+                            
+                            # Send avatar as first message
+                            if self.avatar_file and os.path.exists(self.avatar_file):
+                                try:
+                                    avatar_image = discord.File(self.avatar_file, filename="avatar.png")
+                                    await interaction.response.send_message(embed=avatar_embed, file=avatar_image, ephemeral=True)
+                                except Exception:
+                                    # If file fails, just use URL
+                                    await interaction.response.send_message(embed=avatar_embed, ephemeral=True)
+                            else:
+                                await interaction.response.send_message(embed=avatar_embed, ephemeral=True)
+                        else:
+                            # No avatar, need to respond to interaction first
+                            pass
+                        
+                        # Now send description text
                         # Discord embed description limit is 4096 characters
                         if len(description_text) <= 4096:
                             desc_embed = discord.Embed(
@@ -1270,29 +1297,44 @@ class PresetBot(commands.Bot):
                                 description=description_text,
                                 color=discord.Color.blue()
                             )
-                            await interaction.response.send_message(embed=desc_embed, ephemeral=True)
+                            if self.avatar_url or (self.avatar_file and os.path.exists(self.avatar_file)):
+                                # Avatar was sent, use followup
+                                await interaction.followup.send(embed=desc_embed, ephemeral=True)
+                            else:
+                                # No avatar, this is the first response
+                                await interaction.response.send_message(embed=desc_embed, ephemeral=True)
                         else:
                             # Split long descriptions into multiple embeds
                             chunks = split_text_intelligently(description_text, max_chunk_size=4000)
                             
-                            # Send first chunk as response
-                            first_embed = discord.Embed(
-                                title=f"Description (Part 1/{len(chunks)})",
-                                description=chunks[0],
-                                color=discord.Color.blue()
-                            )
-                            await interaction.response.send_message(embed=first_embed, ephemeral=True)
-                            
-                            # Send remaining chunks as follow-ups
-                            for i, chunk in enumerate(chunks[1:], start=2):
-                                follow_embed = discord.Embed(
-                                    title=f"Description (Part {i}/{len(chunks)})",
-                                    description=chunk,
+                            if self.avatar_url or (self.avatar_file and os.path.exists(self.avatar_file)):
+                                # Avatar was sent, all chunks are followups
+                                for i, chunk in enumerate(chunks, start=1):
+                                    follow_embed = discord.Embed(
+                                        title=f"Description (Part {i}/{len(chunks)})",
+                                        description=chunk,
+                                        color=discord.Color.blue()
+                                    )
+                                    await interaction.followup.send(embed=follow_embed, ephemeral=True)
+                            else:
+                                # No avatar, send first chunk as response
+                                first_embed = discord.Embed(
+                                    title=f"Description (Part 1/{len(chunks)})",
+                                    description=chunks[0],
                                     color=discord.Color.blue()
                                 )
-                                await interaction.followup.send(embed=follow_embed, ephemeral=True)
+                                await interaction.response.send_message(embed=first_embed, ephemeral=True)
+                                
+                                # Send remaining chunks as follow-ups
+                                for i, chunk in enumerate(chunks[1:], start=2):
+                                    follow_embed = discord.Embed(
+                                        title=f"Description (Part {i}/{len(chunks)})",
+                                        description=chunk,
+                                        color=discord.Color.blue()
+                                    )
+                                    await interaction.followup.send(embed=follow_embed, ephemeral=True)
                 
-                view = DescriptionView(user_char.get("description", ""))
+                view = DescriptionView(user_char.get("description", ""), user_char.get("avatar_url", ""), user_char.get("avatar_file", ""))
                 await ctx.send(embed=embed, view=view)
                 
             except Exception as e:
@@ -1382,15 +1424,42 @@ class PresetBot(commands.Bot):
                 
                 # Create a view with buttons to show description and scenario
                 class CharacterView(discord.ui.View):
-                    def __init__(self, description, scenario):
+                    def __init__(self, description, scenario, avatar_url, avatar_file):
                         super().__init__(timeout=300)  # 5 minute timeout
                         self.description = description
                         self.scenario = scenario
+                        self.avatar_url = avatar_url
+                        self.avatar_file = avatar_file
                     
                     @discord.ui.button(label="Show Description", style=discord.ButtonStyle.primary)
                     async def show_description(self, interaction: discord.Interaction, button: discord.ui.Button):
                         description_text = self.description if self.description else "No description available."
                         
+                        # Send avatar image first if available
+                        if self.avatar_url or (self.avatar_file and os.path.exists(self.avatar_file)):
+                            avatar_embed = discord.Embed(
+                                color=discord.Color.blue()
+                            )
+                            
+                            # Set the image in the embed
+                            if self.avatar_url:
+                                avatar_embed.set_image(url=self.avatar_url)
+                            
+                            # Send avatar as first message
+                            if self.avatar_file and os.path.exists(self.avatar_file):
+                                try:
+                                    avatar_image = discord.File(self.avatar_file, filename="avatar.png")
+                                    await interaction.response.send_message(embed=avatar_embed, file=avatar_image, ephemeral=True)
+                                except Exception:
+                                    # If file fails, just use URL
+                                    await interaction.response.send_message(embed=avatar_embed, ephemeral=True)
+                            else:
+                                await interaction.response.send_message(embed=avatar_embed, ephemeral=True)
+                        else:
+                            # No avatar, need to respond to interaction first
+                            pass
+                        
+                        # Now send description text
                         # Discord embed description limit is 4096 characters
                         if len(description_text) <= 4096:
                             desc_embed = discord.Embed(
@@ -1398,27 +1467,42 @@ class PresetBot(commands.Bot):
                                 description=description_text,
                                 color=discord.Color.blue()
                             )
-                            await interaction.response.send_message(embed=desc_embed, ephemeral=True)
+                            if self.avatar_url or (self.avatar_file and os.path.exists(self.avatar_file)):
+                                # Avatar was sent, use followup
+                                await interaction.followup.send(embed=desc_embed, ephemeral=True)
+                            else:
+                                # No avatar, this is the first response
+                                await interaction.response.send_message(embed=desc_embed, ephemeral=True)
                         else:
                             # Split long descriptions into multiple embeds
                             chunks = split_text_intelligently(description_text, max_chunk_size=4000)
                             
-                            # Send first chunk as response
-                            first_embed = discord.Embed(
-                                title=f"Description (Part 1/{len(chunks)})",
-                                description=chunks[0],
-                                color=discord.Color.blue()
-                            )
-                            await interaction.response.send_message(embed=first_embed, ephemeral=True)
-                            
-                            # Send remaining chunks as follow-ups
-                            for i, chunk in enumerate(chunks[1:], start=2):
-                                follow_embed = discord.Embed(
-                                    title=f"Description (Part {i}/{len(chunks)})",
-                                    description=chunk,
+                            if self.avatar_url or (self.avatar_file and os.path.exists(self.avatar_file)):
+                                # Avatar was sent, all chunks are followups
+                                for i, chunk in enumerate(chunks, start=1):
+                                    follow_embed = discord.Embed(
+                                        title=f"Description (Part {i}/{len(chunks)})",
+                                        description=chunk,
+                                        color=discord.Color.blue()
+                                    )
+                                    await interaction.followup.send(embed=follow_embed, ephemeral=True)
+                            else:
+                                # No avatar, send first chunk as response
+                                first_embed = discord.Embed(
+                                    title=f"Description (Part 1/{len(chunks)})",
+                                    description=chunks[0],
                                     color=discord.Color.blue()
                                 )
-                                await interaction.followup.send(embed=follow_embed, ephemeral=True)
+                                await interaction.response.send_message(embed=first_embed, ephemeral=True)
+                                
+                                # Send remaining chunks as follow-ups
+                                for i, chunk in enumerate(chunks[1:], start=2):
+                                    follow_embed = discord.Embed(
+                                        title=f"Description (Part {i}/{len(chunks)})",
+                                        description=chunk,
+                                        color=discord.Color.blue()
+                                    )
+                                    await interaction.followup.send(embed=follow_embed, ephemeral=True)
                     
                     @discord.ui.button(label="Show Scenario", style=discord.ButtonStyle.secondary)
                     async def show_scenario(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -1453,7 +1537,7 @@ class PresetBot(commands.Bot):
                                 )
                                 await interaction.followup.send(embed=follow_embed, ephemeral=True)
                 
-                view = CharacterView(char.get("description", ""), char.get("scenario", ""))
+                view = CharacterView(char.get("description", ""), char.get("scenario", ""), char.get("avatar_url", ""), char.get("avatar_file", ""))
                 await ctx.send(embed=embed, view=view)
                 
             except Exception as e:
