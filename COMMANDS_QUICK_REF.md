@@ -61,7 +61,7 @@ Shows information about the AI character named "narrator".
 **What it does:**
 - Downloads and saves the image
 - Updates the user character's avatar
-- Image saved to `character_avatars/` directory
+- Image saved to `ucharacter_avatars/` directory
 
 ---
 

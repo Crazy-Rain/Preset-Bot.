@@ -1168,7 +1168,7 @@ class PresetBot(commands.Bot):
                 await ctx.send(f"Downloading image for '{character_name}'...")
                 
                 # Download the image
-                avatars_dir = "character_avatars"
+                avatars_dir = "ucharacter_avatars"
                 os.makedirs(avatars_dir, exist_ok=True)
                 
                 # Determine file extension from URL
@@ -1316,22 +1316,17 @@ class PresetBot(commands.Bot):
                 
                 embed.add_field(name="Character ID", value=char.get("name", "Unknown"), inline=False)
                 
-                # Add scenario if available
-                scenario = char.get("scenario", "")
-                if scenario:
-                    scenario_preview = scenario[:100] + "..." if len(scenario) > 100 else scenario
-                    embed.add_field(name="Scenario", value=scenario_preview, inline=False)
-                
                 # Add avatar if available
                 avatar_url = char.get("avatar_url", "")
                 if avatar_url:
                     embed.set_thumbnail(url=avatar_url)
                 
-                # Create a view with a button to show description
-                class DescriptionView(discord.ui.View):
-                    def __init__(self, description):
+                # Create a view with buttons to show description and scenario
+                class CharacterView(discord.ui.View):
+                    def __init__(self, description, scenario):
                         super().__init__(timeout=300)  # 5 minute timeout
                         self.description = description
+                        self.scenario = scenario
                     
                     @discord.ui.button(label="Show Description", style=discord.ButtonStyle.primary)
                     async def show_description(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -1341,8 +1336,17 @@ class PresetBot(commands.Bot):
                             color=discord.Color.blue()
                         )
                         await interaction.response.send_message(embed=desc_embed, ephemeral=True)
+                    
+                    @discord.ui.button(label="Show Scenario", style=discord.ButtonStyle.secondary)
+                    async def show_scenario(self, interaction: discord.Interaction, button: discord.ui.Button):
+                        scenario_embed = discord.Embed(
+                            title=f"Scenario",
+                            description=self.scenario if self.scenario else "No scenario available.",
+                            color=discord.Color.blue()
+                        )
+                        await interaction.response.send_message(embed=scenario_embed, ephemeral=True)
                 
-                view = DescriptionView(char.get("description", ""))
+                view = CharacterView(char.get("description", ""), char.get("scenario", ""))
                 await ctx.send(embed=embed, view=view)
                 
             except Exception as e:

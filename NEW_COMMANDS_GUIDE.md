@@ -151,13 +151,13 @@ Updates the user character's avatar using the attached image
 - **Automatic Download**: Downloads the image and saves it locally
 - **Supported Formats**: PNG, JPG, JPEG, GIF, WEBP
 - **URL Storage**: Stores both the URL and local file path in the config
-- **Persistent Storage**: Images are saved in the `character_avatars/` directory
+- **Persistent Storage**: Images are saved in the `ucharacter_avatars/` directory
 
 ### Process
 
 1. Bot validates that the user character exists
 2. Bot downloads the image from URL or attachment
-3. Image is saved to `character_avatars/<character_name>.<extension>`
+3. Image is saved to `ucharacter_avatars/<character_name>.<extension>`
 4. Character config is updated with both `avatar_url` and `avatar_file`
 5. Confirmation message is sent
 
@@ -177,7 +177,7 @@ Updates the user character's avatar using the attached image
 | Usage | `!image <char> <url>` | `!cimage <char> <url>` |
 | Accepts URL | ✅ Yes | ✅ Yes |
 | Accepts Attachment | ✅ Yes | ✅ Yes |
-| Storage Location | `character_avatars/` | `character_avatars/` |
+| Storage Location | `character_avatars/` | `ucharacter_avatars/` |
 | Updates Field | `characters` in config | `user_characters` in config |
 
 ---
@@ -266,7 +266,8 @@ When clicked:
 
 ### Avatar Management
 
-- Avatars are stored in `character_avatars/` directory
+- AI character avatars are stored in `character_avatars/` directory
+- User character avatars are stored in `ucharacter_avatars/` directory
 - Filenames follow the pattern: `<character_name>.<extension>`
 - Both URL and local file paths are stored in the config
 - If both exist, the URL takes precedence for webhooks

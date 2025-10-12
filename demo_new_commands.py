@@ -70,7 +70,7 @@ def main():
         display_name="Thorin Ironhammer",
         description="A brave dwarf warrior with a legendary warhammer. Courageous, loyal, and loves treasure.",
         avatar_url="https://example.com/thorin.png",
-        avatar_file="character_avatars/thorin.png"
+        avatar_file="ucharacter_avatars/thorin.png"
     )
     print("   ✓ Avatar updated for Thorin Ironhammer")
     
@@ -81,7 +81,7 @@ def main():
         display_name="Elara Moonwhisper",
         description="An elven mage specializing in light magic. Wise, compassionate, and mysterious.",
         avatar_url="https://example.com/elara.png",
-        avatar_file="character_avatars/elara.png"
+        avatar_file="ucharacter_avatars/elara.png"
     )
     print("   ✓ Avatar updated for Elara Moonwhisper")
     

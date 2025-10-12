@@ -81,12 +81,12 @@ def test_config_manager():
         display_name="Alice Updated",
         description="A brave adventurer updated",
         avatar_url="https://example.com/alice_new.png",
-        avatar_file="character_avatars/alice.png"
+        avatar_file="ucharacter_avatars/alice.png"
     )
     
     alice_updated = config_mgr.get_user_character_by_name("alice")
     assert alice_updated["display_name"] == "Alice Updated", "Alice should be updated"
-    assert alice_updated["avatar_file"] == "character_avatars/alice.png", "Avatar file should be set"
+    assert alice_updated["avatar_file"] == "ucharacter_avatars/alice.png", "Avatar file should be set"
     
     # Clean up
     if os.path.exists(test_config_path):

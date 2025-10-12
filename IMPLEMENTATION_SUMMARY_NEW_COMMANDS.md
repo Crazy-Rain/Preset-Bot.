@@ -17,7 +17,7 @@ This implementation adds three new commands to the Preset Bot that enhance the u
 - **Purpose**: Updates user character avatar images
 - **Functionality**:
   - Accepts URL or Discord attachment
-  - Downloads and saves image to `character_avatars/` directory
+  - Downloads and saves image to `ucharacter_avatars/` directory
   - Updates user character config with both `avatar_url` and `avatar_file`
   - Supports PNG, JPG, JPEG, GIF, WEBP formats
 
@@ -81,7 +81,7 @@ Added thorough test coverage:
 - Dual storage: URL and local file path
 - Automatic image download from URLs or Discord attachments
 - Supports multiple image formats
-- Images stored in `character_avatars/` directory
+- Images stored in `ucharacter_avatars/` directory
 
 ## Technical Details
 
