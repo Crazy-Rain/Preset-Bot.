@@ -233,6 +233,7 @@ Preset-Bot./
 ## Advanced Features
 
 For detailed information about the new features, see:
+- **[LAUNCH_GUIDE.md](LAUNCH_GUIDE.md)** - Comprehensive guide for all launch methods (NEW!)
 - **[PRESET_FEATURES.md](PRESET_FEATURES.md)** - Comprehensive guide to presets, user characters, and chat system
 - **[LOREBOOK_GUIDE.md](LOREBOOK_GUIDE.md)** - Complete lorebook documentation with examples
 - **[LOREBOOK_IMPORTER_GUIDE.md](LOREBOOK_IMPORTER_GUIDE.md)** - Guide to bulk importing lorebook entries (NEW!)
