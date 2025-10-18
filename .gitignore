@@ -43,6 +43,13 @@ env/
 .DS_Store
 Thumbs.db
 
+# Node.js
+node_modules/
+package-lock.json
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
 # Character avatars (user uploads)
 character_avatars/*
 !character_avatars/.gitkeep
