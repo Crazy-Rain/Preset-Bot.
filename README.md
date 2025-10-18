@@ -1,6 +1,20 @@
 # Preset-Bot.
 Rebuild Attempt - Stable AI Response and Manual Send Features
 
+## Quick Start
+
+Get started in 3 simple steps:
+
+```bash
+# 1. Install dependencies
+npm install
+
+# 2. Launch the bot
+npm start
+
+# 3. Follow the interactive menu to configure and run
+```
+
 ## Overview
 This is a Discord bot with AI response capabilities and manual send features. The bot supports:
 - **OpenAI Compatible API Integration**: Configure any OpenAI-compatible API endpoint
@@ -64,16 +78,58 @@ git clone https://github.com/Crazy-Rain/Preset-Bot..git
 cd Preset-Bot.
 ```
 
-2. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
+2. Install dependencies (choose one method):
+
+   **Option A: Using npm (Recommended)**
+   ```bash
+   npm install
+   ```
+
+   **Option B: Using pip directly**
+   ```bash
+   pip install -r requirements.txt
+   ```
 
 3. Configure the bot:
    - Option 1: Run the GUI: `python gui.py`
    - Option 2: Edit `config.json` manually (created from `config_template.json`)
 
 ## Usage
+
+### Quick Start (Easiest Methods)
+
+**Option 1: Using npm start**
+```bash
+npm start
+```
+This launches an interactive menu where you can choose to run the GUI, bot, or check configuration.
+
+**Option 2: Using start.sh script**
+```bash
+./start.sh
+```
+This provides an interactive menu with the following options:
+1. Run Configuration GUI
+2. Run Discord Bot
+3. Check Configuration Status
+4. Run Interactive Start Menu
+5. Exit
+
+You can also use direct commands:
+```bash
+./start.sh gui          # Launch GUI directly
+./start.sh bot          # Start the bot directly
+./start.sh check        # Check configuration
+./start.sh interactive  # Launch interactive menu
+```
+
+**Option 3: Using npm scripts**
+```bash
+npm run gui             # Run Configuration GUI
+npm run bot             # Run Discord Bot
+npm run check-config    # Check configuration status
+npm test                # Run tests
+```
 
 ### GUI Mode (Recommended)
 Run the GUI interface for easy configuration and manual message sending:
@@ -177,6 +233,7 @@ Preset-Bot./
 ## Advanced Features
 
 For detailed information about the new features, see:
+- **[LAUNCH_GUIDE.md](LAUNCH_GUIDE.md)** - Comprehensive guide for all launch methods (NEW!)
 - **[PRESET_FEATURES.md](PRESET_FEATURES.md)** - Comprehensive guide to presets, user characters, and chat system
 - **[LOREBOOK_GUIDE.md](LOREBOOK_GUIDE.md)** - Complete lorebook documentation with examples
 - **[LOREBOOK_IMPORTER_GUIDE.md](LOREBOOK_IMPORTER_GUIDE.md)** - Guide to bulk importing lorebook entries (NEW!)
