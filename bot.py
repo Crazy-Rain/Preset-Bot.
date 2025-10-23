@@ -928,6 +928,11 @@ class PresetBot(commands.Bot):
             Example: !chat Alice: "Hello there!" waves enthusiastically
             """
             try:
+                # Validate that message is not empty or only whitespace
+                if not message or not message.strip():
+                    await ctx.send("Please provide a message. Usage: `!chat [character]: your message here`")
+                    return
+                
                 # Reload config to get latest character/lorebook updates
                 self.config_manager.reload_config()
                 
@@ -1838,6 +1843,34 @@ class PresetBot(commands.Bot):
             
             # Track !chat messages automatically (already handled in command)
             # But we can also track webhook messages from the bot here if needed
+        
+        @self.event
+        async def on_command_error(ctx, error):
+            """Handle command errors gracefully"""
+            # Handle missing required argument (e.g., when message parsing fails with newlines)
+            if isinstance(error, commands.MissingRequiredArgument):
+                if error.param.name == 'message':
+                    await ctx.send("Please provide a message after the command. Usage: `!chat [character]: your message here`")
+                else:
+                    await ctx.send(f"Missing required argument: {error.param.name}")
+                return
+            
+            # Handle bad argument errors
+            if isinstance(error, commands.BadArgument):
+                await ctx.send(f"Invalid argument provided: {str(error)}")
+                return
+            
+            # Handle command not found (ignore silently - might be a message to another bot)
+            if isinstance(error, commands.CommandNotFound):
+                return
+            
+            # Handle other errors
+            print(f"Command error in {ctx.command}: {str(error)}")
+            import traceback
+            print(traceback.format_exc())
+            
+            # Don't expose internal errors to users
+            await ctx.send("An error occurred while processing the command. Please check the console for details.")
 
 
 def main():
