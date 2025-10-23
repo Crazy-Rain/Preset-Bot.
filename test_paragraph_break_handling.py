@@ -87,6 +87,8 @@ class TestParagraphBreakHandling(unittest.IsolatedAsyncioTestCase):
     
     def test_various_newline_patterns(self):
         """Test various newline patterns that users might send"""
+        # Test cases: (description, test_string, expected_validity)
+        # expected_validity is True if the message should be accepted, False if rejected
         test_cases = [
             ("Single newline", "Line 1\nLine 2", True),
             ("Double newline (paragraph)", "Para 1\n\nPara 2", True),
