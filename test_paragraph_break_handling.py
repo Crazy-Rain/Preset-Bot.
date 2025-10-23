@@ -88,21 +88,25 @@ class TestParagraphBreakHandling(unittest.IsolatedAsyncioTestCase):
     def test_various_newline_patterns(self):
         """Test various newline patterns that users might send"""
         test_cases = [
-            ("Single newline", "Line 1\nLine 2"),
-            ("Double newline (paragraph)", "Para 1\n\nPara 2"),
-            ("Triple newline", "Text\n\n\nMore text"),
-            ("Leading newline", "\nText"),
-            ("Leading double newline", "\n\nText"),
-            ("Trailing newline", "Text\n"),
-            ("Trailing double newline", "Text\n\n"),
-            ("Mixed", "Start\n\nMiddle\nEnd"),
+            ("Single newline", "Line 1\nLine 2", True),
+            ("Double newline (paragraph)", "Para 1\n\nPara 2", True),
+            ("Triple newline", "Text\n\n\nMore text", True),
+            ("Leading newline", "\nText", True),
+            ("Leading double newline", "\n\nText", True),
+            ("Trailing newline", "Text\n", True),
+            ("Trailing double newline", "Text\n\n", True),
+            ("Mixed", "Start\n\nMiddle\nEnd", True),
+            ("Only newlines (should be invalid)", "\n\n", False),
+            ("Only whitespace (should be invalid)", "   ", False),
+            ("Empty string (should be invalid)", "", False),
         ]
         
-        for name, test_string in test_cases:
-            # All should be non-empty after stripping
-            if test_string.strip():
-                self.assertTrue(True, f"{name}: {repr(test_string)}")
-            print(f"✓ {name} pattern verified: {repr(test_string)}")
+        for name, test_string, should_be_valid in test_cases:
+            # Check if valid (non-empty after stripping)
+            is_valid = bool(test_string.strip())
+            self.assertEqual(is_valid, should_be_valid, 
+                           f"{name}: expected {should_be_valid}, got {is_valid}")
+            print(f"✓ {name} pattern verified: {repr(test_string)} (valid={is_valid})")
 
 
 def run_tests():

@@ -928,6 +928,11 @@ class PresetBot(commands.Bot):
             Example: !chat Alice: "Hello there!" waves enthusiastically
             """
             try:
+                # Validate that message is not empty or only whitespace
+                if not message or not message.strip():
+                    await ctx.send("Please provide a message. Usage: `!chat [character]: your message here`")
+                    return
+                
                 # Reload config to get latest character/lorebook updates
                 self.config_manager.reload_config()
                 
