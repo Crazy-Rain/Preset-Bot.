@@ -10,8 +10,13 @@ def validate_message(message: str) -> tuple[bool, str]:
     """
     Validate a message for the chat command
     
+    Args:
+        message: The user's message content to validate
+        
     Returns:
-        (is_valid, feedback_message)
+        A tuple of (is_valid, feedback_message) where:
+        - is_valid: True if message is valid, False otherwise
+        - feedback_message: Helpful feedback for the user
     """
     if not message or not message.strip():
         return False, "Please provide a message. Usage: `!chat [character]: your message here`"
@@ -55,7 +60,7 @@ def demonstrate_validation():
     print("Summary:")
     print("=" * 70)
     print()
-    print("✅ Messages with paragraph breaks (\\n\\n) are now handled correctly")
+    print("✅ Messages with paragraph breaks (double newlines) are now handled correctly")
     print("✅ Empty and whitespace-only messages are rejected with helpful feedback")
     print("✅ Bot no longer stops when processing messages with newlines")
     print("✅ All newline patterns (single, double, leading, trailing) work properly")
