@@ -5,6 +5,44 @@ Preset Bot - Quick Start Launcher
 
 import sys
 import os
+import subprocess
+
+def check_and_install_dependencies():
+    """Check if required dependencies are installed, install if missing"""
+    required_modules = ['discord', 'aiohttp', 'openai', 'dotenv', 'PIL']
+    missing_modules = []
+    
+    for module in required_modules:
+        try:
+            __import__(module)
+        except ImportError:
+            missing_modules.append(module)
+    
+    if missing_modules:
+        print("\n" + "="*50)
+        print("  Installing Missing Dependencies")
+        print("="*50)
+        print(f"\n⚠️  Missing modules: {', '.join(missing_modules)}")
+        print("📦 Installing dependencies from requirements.txt...")
+        
+        try:
+            # Use the same Python interpreter that's running this script
+            subprocess.check_call([
+                sys.executable, '-m', 'pip', 'install', '--user', '-r', 'requirements.txt'
+            ])
+            print("\n✓ Dependencies installed successfully!")
+            print("="*50 + "\n")
+            return True
+        except subprocess.CalledProcessError as e:
+            print(f"\n❌ Failed to install dependencies: {e}")
+            print("\nPlease install dependencies manually using:")
+            print(f"  {sys.executable} -m pip install --user -r requirements.txt")
+            print("\nOr using npm:")
+            print("  npm install")
+            print("="*50 + "\n")
+            return False
+    
+    return True
 
 def print_menu():
     """Display the main menu"""
@@ -59,6 +97,11 @@ def run_bot():
 
 def main():
     """Main entry point"""
+    # Check and install dependencies before starting
+    if not check_and_install_dependencies():
+        print("\n❌ Cannot continue without required dependencies.")
+        sys.exit(1)
+    
     while True:
         print_menu()
         choice = input("\nEnter your choice (1-4): ").strip()

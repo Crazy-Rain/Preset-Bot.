@@ -89,6 +89,8 @@ cd Preset-Bot.
    ```bash
    pip install -r requirements.txt
    ```
+   
+   **Note:** If running as a startup application, `start.py` will automatically check and install missing dependencies when launched.
 
 3. Configure the bot:
    - Option 1: Run the GUI: `python gui.py`

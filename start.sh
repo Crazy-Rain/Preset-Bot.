@@ -51,7 +51,8 @@ check_dependencies() {
     # Try to import discord.py to check if dependencies are installed
     if ! python3 -c "import discord" 2>/dev/null; then
         print_message "$YELLOW" "📥 Installing dependencies..."
-        pip install -r requirements.txt
+        # Use python3 -m pip to ensure we use the right pip for the python version
+        python3 -m pip install --user -r requirements.txt
         print_message "$GREEN" "✓ Dependencies installed successfully"
     else
         print_message "$GREEN" "✓ Dependencies already installed"
