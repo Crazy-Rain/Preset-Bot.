@@ -142,6 +142,27 @@ Then select option 2 to start the bot.
 
 ## Troubleshooting
 
+### ModuleNotFoundError when running at startup
+
+If you get errors like `ModuleNotFoundError: No module named 'aiohttp'` when running the bot at system startup:
+
+**Cause:** The system startup environment may use a different Python environment than your user account, resulting in missing dependencies.
+
+**Solution:** The bot now automatically checks and installs missing dependencies when using `start.py`. To ensure this works at startup:
+
+1. Use `python3 start.py` or the wrapper script (see Auto-start section) instead of `python3 bot.py` directly
+2. Or, install dependencies system-wide:
+   ```bash
+   sudo pip3 install -r requirements.txt
+   ```
+3. Or, use a virtual environment and activate it in your startup script
+
+**For Raspberry Pi/Linux startup applications:**
+Make sure your startup script uses the full path to Python and the bot directory:
+```bash
+cd /path/to/Preset-Bot. && /usr/bin/python3 start.py
+```
+
 ### npm install fails
 
 If `npm install` fails, try installing Python dependencies directly:
@@ -227,6 +248,8 @@ python3 bot.py
 
 ### Auto-start on System Boot (Linux)
 
+**Note:** The bot now includes automatic dependency checking and installation when using `start.py`. This helps resolve common issues when running as a startup application where dependencies might not be available in the system Python environment.
+
 Create a systemd service file at `/etc/systemd/system/preset-bot.service`:
 
 ```ini
@@ -238,11 +261,41 @@ After=network.target
 Type=simple
 User=yourusername
 WorkingDirectory=/path/to/Preset-Bot.
-ExecStart=/usr/bin/python3 bot.py
+# Use start.py instead of bot.py for automatic dependency management
+ExecStart=/usr/bin/python3 start.py
+# Send "2" to select "Run Discord Bot" option
+StandardInput=file:/path/to/Preset-Bot./startup_input.txt
 Restart=always
 
 [Install]
 WantedBy=multi-user.target
+```
+
+Create `startup_input.txt` in your bot directory:
+```bash
+echo "2" > /path/to/Preset-Bot./startup_input.txt
+```
+
+Or, if you prefer to run the bot directly without the menu, you can create a simple wrapper script:
+
+Create `/path/to/Preset-Bot./run_bot.py`:
+```python
+#!/usr/bin/env python3
+import sys
+import os
+
+# Ensure dependencies are available
+from start import check_and_install_dependencies
+check_and_install_dependencies()
+
+# Run the bot
+import bot
+bot.main()
+```
+
+Then update the service file:
+```ini
+ExecStart=/usr/bin/python3 /path/to/Preset-Bot./run_bot.py
 ```
 
 Then:
