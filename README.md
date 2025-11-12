@@ -21,6 +21,8 @@ This is a Discord bot with AI response capabilities and manual send features. Th
 - **Manual Send**: Send messages directly to Discord channels with AI-generated responses
 - **Character System**: Create and manage different AI characters with custom system prompts
 - **GUI Interface**: User-friendly interface for configuration and manual message sending
+- **Interactive Discord Configuration**: Configure the bot directly through Discord with buttons and modals (NEW!)
+- **Automatic Reconnection**: Automatic retry with exponential backoff on connection failures (NEW!)
 
 ## Features
 
@@ -29,43 +31,61 @@ This is a Discord bot with AI response capabilities and manual send features. Th
 - Supports any OpenAI-compatible endpoint (OpenAI, Azure OpenAI, LocalAI, etc.)
 - Configuration saved to `config.json`
 
-### 2. Preset System (NEW!)
+### 2. Interactive Discord Configuration (NEW!)
+- `!config` command opens an interactive menu with buttons
+- Configure OpenAI settings through a modal form (Base URL, API Key, Model)
+- View AI characters, user characters, lorebooks, and presets
+- View bot settings including reconnection configuration
+- Admin-only access for security
+- No need to stop the bot or open GUI on the host machine
+
+### 3. Automatic Reconnection (NEW!)
+- Automatic retry on connection failures with exponential backoff
+- Configurable retry settings:
+  - Max retries (default: 10)
+  - Base delay (default: 5 seconds)
+  - Max delay (default: 300 seconds)
+- Graceful handling of Discord login failures and HTTP exceptions
+- Continues running without manual intervention
+
+### 4. Preset System
 - Advanced AI configuration with multiple message blocks
 - Fine-tune AI behavior: temperature, top_p, reasoning, penalties
 - Save and load different presets for different scenarios
 - Active/Inactive blocks for easy testing
 
-### 3. User Characters (NEW!)
+### 5. User Characters
 - Create character profiles for users/players
 - Use with `!chat` command for role-playing
 - Avatar support (URL or file upload)
 
-### 4. Chat System (NEW!)
+### 6. Chat System
 - `!chat` command for tracked conversations
 - Per-channel message history
 - Context-aware responses using last 20 messages
 - Integrates with User Characters
 
-### 5. Lorebook System (NEW!)
+### 7. Lorebook System
 - Create contextual information repositories
 - Active/Inactive toggle per lorebook
 - **Constant entries**: Always included in AI context
 - **Normal entries**: Triggered by keywords in messages
-- **Bulk Import**: Import lorebook entries from JSON files (NEW!)
+- **Bulk Import**: Import lorebook entries from JSON files
 - Perfect for world-building, character lore, and campaign tracking
 - Similar to SillyTavern's lorebook functionality
 
-### 6. Manual Send
+### 8. Manual Send
 - Send messages directly to Discord channels
 - Requires Server ID and Channel ID
 - Character selection from configured characters
 - AI generates responses based on your input and selected character
 
-### 7. Discord Bot Configuration
+### 9. Discord Bot Configuration
 - Secure token storage in config file
-- Easy token management through GUI or config file
+- Easy token management through GUI, config file, or Discord commands
+- Interactive configuration through Discord with `!config` command
 
-### 8. Character System
+### 10. Character System
 - Create and manage different AI characters with custom system prompts
 - Avatar support for characters (URL or local file)
 - Webhook integration for character identity in Discord
@@ -154,6 +174,7 @@ python bot.py
 ```
 
 Available commands:
+- `!config` - Open interactive configuration menu with buttons (Admin only, NEW!)
 - `!settoken <token>` - Set Discord bot token (Admin only)
 - `!setopenai <base_url> <api_key>` - Configure OpenAI API (Admin only)
 - `!addcharacter <name> <system_prompt>` - Add new character (Admin only)
@@ -184,7 +205,13 @@ Available commands:
 ```json
 {
   "discord": {
-    "token": "YOUR_DISCORD_BOT_TOKEN"
+    "token": "YOUR_DISCORD_BOT_TOKEN",
+    "reconnect": {
+      "enabled": true,
+      "max_retries": 10,
+      "base_delay": 5,
+      "max_delay": 300
+    }
   },
   "openai": {
     "base_url": "https://api.openai.com/v1",
@@ -203,6 +230,14 @@ Available commands:
   "lorebooks": []
 }
 ```
+
+#### Reconnection Settings
+- `enabled`: Enable/disable automatic reconnection (default: true)
+- `max_retries`: Maximum number of connection retry attempts (default: 10)
+- `base_delay`: Initial delay in seconds before first retry (default: 5)
+- `max_delay`: Maximum delay in seconds between retries (default: 300)
+
+The bot uses exponential backoff: each retry waits longer than the previous one, up to the max_delay.
 
 ### Getting Required Credentials
 
@@ -236,11 +271,13 @@ Preset-Bot./
 
 For detailed information about the new features, see:
 - **[LAUNCH_GUIDE.md](LAUNCH_GUIDE.md)** - Comprehensive guide for all launch methods (NEW!)
+- **[INTERACTIVE_CONFIG_GUIDE.md](INTERACTIVE_CONFIG_GUIDE.md)** - Complete guide to Discord-based interactive configuration (NEW!)
+- **[RECONNECTION_GUIDE.md](RECONNECTION_GUIDE.md)** - Automatic reconnection and retry logic documentation (NEW!)
 - **[PRESET_FEATURES.md](PRESET_FEATURES.md)** - Comprehensive guide to presets, user characters, and chat system
 - **[LOREBOOK_GUIDE.md](LOREBOOK_GUIDE.md)** - Complete lorebook documentation with examples
-- **[LOREBOOK_IMPORTER_GUIDE.md](LOREBOOK_IMPORTER_GUIDE.md)** - Guide to bulk importing lorebook entries (NEW!)
+- **[LOREBOOK_IMPORTER_GUIDE.md](LOREBOOK_IMPORTER_GUIDE.md)** - Guide to bulk importing lorebook entries
 - **[LOREBOOK_QUICK_REFERENCE.md](LOREBOOK_QUICK_REFERENCE.md)** - Quick command reference for lorebooks
-- **[NEW_COMMANDS_GUIDE.md](NEW_COMMANDS_GUIDE.md)** - Guide for !viewu, !viewc, and !cimage commands (NEW!)
+- **[NEW_COMMANDS_GUIDE.md](NEW_COMMANDS_GUIDE.md)** - Guide for !viewu, !viewc, and !cimage commands
 
 ## Security Notes
 - `config.json` is excluded from version control (.gitignore)
