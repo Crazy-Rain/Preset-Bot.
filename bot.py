@@ -822,6 +822,219 @@ class AIResponseHandler:
             return error_msg
 
 
+class ConfigMenuView(discord.ui.View):
+    """Interactive configuration menu using buttons"""
+    
+    def __init__(self, config_manager: ConfigManager, timeout=180):
+        super().__init__(timeout=timeout)
+        self.config_manager = config_manager
+    
+    @discord.ui.button(label="🔧 OpenAI Config", style=discord.ButtonStyle.primary, row=0)
+    async def openai_config_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Configure OpenAI settings"""
+        await interaction.response.send_modal(OpenAIConfigModal(self.config_manager))
+    
+    @discord.ui.button(label="🤖 Characters", style=discord.ButtonStyle.primary, row=0)
+    async def characters_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """View and manage characters"""
+        characters = self.config_manager.get_characters()
+        
+        if not characters:
+            await interaction.response.send_message("No characters configured.", ephemeral=True)
+            return
+        
+        embed = discord.Embed(
+            title="AI Characters",
+            description="Current AI characters in the system:",
+            color=discord.Color.blue()
+        )
+        
+        for i, char in enumerate(characters, 1):
+            embed.add_field(
+                name=f"{i}. {char.get('display_name', char.get('name', 'Unknown'))}",
+                value=f"**Name:** `{char.get('name', 'N/A')}`\n**Description:** {char.get('description', 'N/A')[:100]}...",
+                inline=False
+            )
+        
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+    
+    @discord.ui.button(label="👥 User Characters", style=discord.ButtonStyle.primary, row=0)
+    async def user_characters_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """View and manage user characters"""
+        user_chars = self.config_manager.get_user_characters()
+        
+        if not user_chars:
+            await interaction.response.send_message("No user characters configured.", ephemeral=True)
+            return
+        
+        embed = discord.Embed(
+            title="User Characters",
+            description="Current user/player characters:",
+            color=discord.Color.green()
+        )
+        
+        for i, char in enumerate(user_chars, 1):
+            embed.add_field(
+                name=f"{i}. {char.get('display_name', char.get('name', 'Unknown'))}",
+                value=f"**Name:** `{char.get('name', 'N/A')}`\n**Description:** {char.get('description', 'N/A')[:100]}...",
+                inline=False
+            )
+        
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+    
+    @discord.ui.button(label="⚙️ Bot Settings", style=discord.ButtonStyle.secondary, row=1)
+    async def bot_settings_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """View bot settings"""
+        reconnect_config = self.config_manager.get_reconnect_config()
+        
+        embed = discord.Embed(
+            title="Bot Settings",
+            description="Current bot configuration:",
+            color=discord.Color.gold()
+        )
+        
+        embed.add_field(
+            name="Reconnection",
+            value=f"**Enabled:** {reconnect_config.get('enabled', True)}\n"
+                  f"**Max Retries:** {reconnect_config.get('max_retries', 10)}\n"
+                  f"**Base Delay:** {reconnect_config.get('base_delay', 5)}s\n"
+                  f"**Max Delay:** {reconnect_config.get('max_delay', 300)}s",
+            inline=False
+        )
+        
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+    
+    @discord.ui.button(label="📚 Lorebooks", style=discord.ButtonStyle.secondary, row=1)
+    async def lorebooks_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """View lorebooks"""
+        lorebooks = self.config_manager.get_lorebooks()
+        
+        if not lorebooks:
+            await interaction.response.send_message("No lorebooks configured.", ephemeral=True)
+            return
+        
+        embed = discord.Embed(
+            title="Lorebooks",
+            description="Available lorebooks:",
+            color=discord.Color.purple()
+        )
+        
+        for lb in lorebooks:
+            status = "✅ Active" if lb.get("active", False) else "❌ Inactive"
+            entries_count = len(lb.get("entries", []))
+            embed.add_field(
+                name=f"{lb.get('name', 'Unknown')} ({status})",
+                value=f"Entries: {entries_count}",
+                inline=True
+            )
+        
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+    
+    @discord.ui.button(label="🎯 Presets", style=discord.ButtonStyle.secondary, row=1)
+    async def presets_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """View presets"""
+        presets = self.config_manager.get_presets()
+        active_preset = self.config_manager.get_active_preset()
+        
+        if not presets:
+            await interaction.response.send_message("No presets configured.", ephemeral=True)
+            return
+        
+        embed = discord.Embed(
+            title="AI Presets",
+            description="Available presets:",
+            color=discord.Color.orange()
+        )
+        
+        for preset in presets:
+            is_active = active_preset and active_preset.get("name") == preset.get("name")
+            status = "⭐ Active" if is_active else ""
+            
+            embed.add_field(
+                name=f"{preset.get('name', 'Unknown')} {status}",
+                value=f"Messages: {len(preset.get('messages', []))}",
+                inline=True
+            )
+        
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+    
+    @discord.ui.button(label="❌ Close", style=discord.ButtonStyle.danger, row=2)
+    async def close_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Close the menu"""
+        await interaction.response.send_message("Configuration menu closed.", ephemeral=True)
+        self.stop()
+
+
+class OpenAIConfigModal(discord.ui.Modal, title="Configure OpenAI Settings"):
+    """Modal for configuring OpenAI settings"""
+    
+    def __init__(self, config_manager: ConfigManager):
+        super().__init__()
+        self.config_manager = config_manager
+        
+        # Get current config
+        openai_config = config_manager.get_openai_config()
+        
+        # Add input fields
+        self.base_url = discord.ui.TextInput(
+            label="Base URL",
+            placeholder="https://api.openai.com/v1",
+            default=openai_config.get("base_url", "https://api.openai.com/v1"),
+            required=True,
+            max_length=200
+        )
+        self.add_item(self.base_url)
+        
+        self.api_key = discord.ui.TextInput(
+            label="API Key",
+            placeholder="sk-...",
+            default=openai_config.get("api_key", ""),
+            required=True,
+            max_length=200,
+            style=discord.TextStyle.short
+        )
+        self.add_item(self.api_key)
+        
+        self.model = discord.ui.TextInput(
+            label="Model (optional)",
+            placeholder="gpt-3.5-turbo",
+            default=openai_config.get("model", "gpt-3.5-turbo"),
+            required=False,
+            max_length=100
+        )
+        self.add_item(self.model)
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        """Handle form submission"""
+        try:
+            # Update config
+            openai_config = self.config_manager.get_openai_config()
+            openai_config["base_url"] = self.base_url.value
+            openai_config["api_key"] = self.api_key.value
+            if self.model.value:
+                openai_config["model"] = self.model.value
+            
+            self.config_manager.config["openai"] = openai_config
+            self.config_manager.save_config()
+            
+            embed = discord.Embed(
+                title="✅ OpenAI Configuration Updated",
+                description="Settings have been saved successfully.",
+                color=discord.Color.green()
+            )
+            embed.add_field(name="Base URL", value=self.base_url.value, inline=False)
+            embed.add_field(name="API Key", value="*" * min(len(self.api_key.value), 20), inline=False)
+            if self.model.value:
+                embed.add_field(name="Model", value=self.model.value, inline=False)
+            
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(
+                f"Error updating configuration: {str(e)}", 
+                ephemeral=True
+            )
+
+
 class PresetBot(commands.Bot):
     """Main Discord bot class"""
     
@@ -1411,6 +1624,42 @@ class PresetBot(commands.Bot):
                 
             except Exception as e:
                 await ctx.send(f"Error: {str(e)}")
+        
+        @self.command(name='config')
+        @commands.has_permissions(administrator=True)
+        async def config_menu(ctx):
+            """
+            Open interactive configuration menu (Admin only)
+            Usage: !config
+            
+            This command opens an interactive menu with buttons to:
+            - Configure OpenAI settings
+            - View and manage AI characters
+            - View and manage user characters
+            - View bot settings (reconnection config)
+            - View lorebooks
+            - View presets
+            """
+            try:
+                embed = discord.Embed(
+                    title="🎛️ Bot Configuration Menu",
+                    description="Use the buttons below to configure the bot.\n\n"
+                               "**Available Options:**\n"
+                               "🔧 **OpenAI Config** - Configure API settings\n"
+                               "🤖 **Characters** - View AI characters\n"
+                               "👥 **User Characters** - View user/player characters\n"
+                               "⚙️ **Bot Settings** - View reconnection settings\n"
+                               "📚 **Lorebooks** - View available lorebooks\n"
+                               "🎯 **Presets** - View AI presets\n",
+                    color=discord.Color.blue()
+                )
+                embed.set_footer(text="Configuration menu expires after 3 minutes of inactivity")
+                
+                view = ConfigMenuView(self.config_manager, timeout=180)
+                await ctx.send(embed=embed, view=view)
+                
+            except Exception as e:
+                await ctx.send(f"Error opening configuration menu: {str(e)}")
         
         @self.command(name='viewc')
         async def viewc(ctx, character_name: Optional[str] = None):
