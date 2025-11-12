@@ -1,6 +1,12 @@
 {
   "discord": {
-    "token": ""
+    "token": "",
+    "reconnect": {
+      "enabled": true,
+      "max_retries": 10,
+      "base_delay": 5,
+      "max_delay": 300
+    }
   },
   "openai": {
     "base_url": "https://api.openai.com/v1",

@@ -6,6 +6,7 @@ import json
 import os
 import asyncio
 import aiohttp
+import time
 from typing import Optional, Dict, Any
 import discord
 from discord.ext import commands
@@ -38,7 +39,13 @@ class ConfigManager:
         """Get default configuration"""
         return {
             "discord": {
-                "token": ""
+                "token": "",
+                "reconnect": {
+                    "enabled": True,
+                    "max_retries": 10,
+                    "base_delay": 5,
+                    "max_delay": 300
+                }
             },
             "openai": {
                 "base_url": "https://api.openai.com/v1",
@@ -98,6 +105,16 @@ class ConfigManager:
     def get_discord_token(self) -> str:
         """Get Discord bot token"""
         return self.config.get("discord", {}).get("token", "")
+    
+    def get_reconnect_config(self) -> Dict[str, Any]:
+        """Get reconnection configuration"""
+        default_reconnect = {
+            "enabled": True,
+            "max_retries": 10,
+            "base_delay": 5,
+            "max_delay": 300
+        }
+        return self.config.get("discord", {}).get("reconnect", default_reconnect)
     
     def set_discord_token(self, token: str) -> None:
         """Set Discord bot token"""
@@ -1874,9 +1891,8 @@ class PresetBot(commands.Bot):
 
 
 def main():
-    """Main entry point"""
+    """Main entry point with automatic reconnection"""
     config_manager = ConfigManager()
-    bot = PresetBot(config_manager)
     
     token = config_manager.get_discord_token()
     if not token:
@@ -1884,7 +1900,90 @@ def main():
         print("Please edit config.json and add your Discord bot token.")
         return
     
-    bot.run(token)
+    reconnect_config = config_manager.get_reconnect_config()
+    reconnect_enabled = reconnect_config.get("enabled", True)
+    max_retries = reconnect_config.get("max_retries", 10)
+    base_delay = reconnect_config.get("base_delay", 5)
+    max_delay = reconnect_config.get("max_delay", 300)
+    
+    retry_count = 0
+    
+    while True:
+        try:
+            # Create a new bot instance for each connection attempt
+            bot = PresetBot(config_manager)
+            
+            print(f"Starting Discord bot... (Attempt {retry_count + 1})")
+            if retry_count > 0:
+                print(f"  Reconnection enabled: {reconnect_enabled}")
+                print(f"  Max retries: {max_retries}")
+            
+            # Run the bot
+            bot.run(token, reconnect=True)
+            
+            # If we get here, the bot was shut down intentionally
+            print("Bot shut down gracefully.")
+            break
+            
+        except discord.LoginFailure as e:
+            print(f"\n[ERROR] Login failed: {str(e)}")
+            print("Please check your Discord bot token in config.json")
+            print("The token may be invalid or expired.")
+            break  # Don't retry on login failures - token needs to be fixed
+            
+        except discord.HTTPException as e:
+            print(f"\n[ERROR] HTTP Exception: {str(e)}")
+            if not reconnect_enabled:
+                print("Reconnection is disabled. Exiting.")
+                break
+                
+            retry_count += 1
+            if retry_count >= max_retries:
+                print(f"Max retries ({max_retries}) reached. Giving up.")
+                break
+            
+            # Calculate delay with exponential backoff
+            delay = min(base_delay * (2 ** (retry_count - 1)), max_delay)
+            print(f"Will retry in {delay} seconds... (Attempt {retry_count}/{max_retries})")
+            time.sleep(delay)
+            
+        except discord.GatewayNotFound as e:
+            print(f"\n[ERROR] Gateway not found: {str(e)}")
+            print("Discord's gateway service may be down.")
+            if not reconnect_enabled:
+                print("Reconnection is disabled. Exiting.")
+                break
+                
+            retry_count += 1
+            if retry_count >= max_retries:
+                print(f"Max retries ({max_retries}) reached. Giving up.")
+                break
+            
+            delay = min(base_delay * (2 ** (retry_count - 1)), max_delay)
+            print(f"Will retry in {delay} seconds... (Attempt {retry_count}/{max_retries})")
+            time.sleep(delay)
+            
+        except KeyboardInterrupt:
+            print("\n[INFO] Received keyboard interrupt. Shutting down...")
+            break
+            
+        except Exception as e:
+            print(f"\n[ERROR] Unexpected error: {str(e)}")
+            import traceback
+            print(traceback.format_exc())
+            
+            if not reconnect_enabled:
+                print("Reconnection is disabled. Exiting.")
+                break
+            
+            retry_count += 1
+            if retry_count >= max_retries:
+                print(f"Max retries ({max_retries}) reached. Giving up.")
+                break
+            
+            delay = min(base_delay * (2 ** (retry_count - 1)), max_delay)
+            print(f"Will retry in {delay} seconds... (Attempt {retry_count}/{max_retries})")
+            time.sleep(delay)
 
 
 if __name__ == "__main__":
