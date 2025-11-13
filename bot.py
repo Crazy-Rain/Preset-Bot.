@@ -868,6 +868,8 @@ class ConfigMenuView(discord.ui.View):
             
             view = CharacterManagementView(self.config_manager)
             await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+            # Store the message for refresh capability
+            view.message = await interaction.original_response()
         except Exception as e:
             await interaction.response.send_message(
                 f"Error opening character management: {str(e)}", 
@@ -901,6 +903,8 @@ class ConfigMenuView(discord.ui.View):
             
             view = UserCharacterManagementView(self.config_manager)
             await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+            # Store the message for refresh capability
+            view.message = await interaction.original_response()
         except Exception as e:
             await interaction.response.send_message(
                 f"Error opening user character management: {str(e)}", 
@@ -1566,9 +1570,10 @@ class ConfirmDeleteView(discord.ui.View):
 class CreateCharacterModal(discord.ui.Modal, title="Create New AI Character"):
     """Modal for creating a new AI character"""
     
-    def __init__(self, config_manager: ConfigManager):
+    def __init__(self, config_manager: ConfigManager, parent_view=None):
         super().__init__()
         self.config_manager = config_manager
+        self.parent_view = parent_view
         
         self.name = discord.ui.TextInput(
             label="Character Name (internal)",
@@ -1634,6 +1639,10 @@ class CreateCharacterModal(discord.ui.Modal, title="Create New AI Character"):
                 embed.add_field(name="Avatar URL", value=avatar_url, inline=False)
             
             await interaction.response.send_message(embed=embed, ephemeral=True)
+            
+            # Refresh parent view if provided
+            if self.parent_view:
+                await self.parent_view.refresh_view(interaction)
         except Exception as e:
             await interaction.response.send_message(
                 f"❌ Error creating character: {str(e)}",
@@ -1644,9 +1653,10 @@ class CreateCharacterModal(discord.ui.Modal, title="Create New AI Character"):
 class CreateUserCharacterModal(discord.ui.Modal, title="Create User Character"):
     """Modal for creating a user character"""
     
-    def __init__(self, config_manager: ConfigManager):
+    def __init__(self, config_manager: ConfigManager, parent_view=None):
         super().__init__()
         self.config_manager = config_manager
+        self.parent_view = parent_view
         
         self.name = discord.ui.TextInput(
             label="Character Name (internal)",
@@ -1712,6 +1722,10 @@ class CreateUserCharacterModal(discord.ui.Modal, title="Create User Character"):
                 embed.add_field(name="Avatar URL", value=avatar_url, inline=False)
             
             await interaction.response.send_message(embed=embed, ephemeral=True)
+            
+            # Refresh parent view if provided
+            if self.parent_view:
+                await self.parent_view.refresh_view(interaction)
         except Exception as e:
             await interaction.response.send_message(
                 f"❌ Error creating user character: {str(e)}",
@@ -1725,6 +1739,8 @@ class CharacterManagementView(discord.ui.View):
     def __init__(self, config_manager: ConfigManager, timeout=180):
         super().__init__(timeout=timeout)
         self.config_manager = config_manager
+        self.selected_name = None
+        self.message = None
         self.update_components()
     
     def update_components(self):
@@ -1736,14 +1752,14 @@ class CharacterManagementView(discord.ui.View):
         if characters:
             # Add character select menu
             options = []
-            for i, char in enumerate(characters):
+            for char in characters:
                 display_name = char.get('display_name', char.get('name', 'Unknown'))
                 name = char.get('name', 'N/A')
                 description = char.get('description', '')[:50]
                 options.append(
                     discord.SelectOption(
                         label=f"{display_name}",
-                        value=str(i),
+                        value=name,
                         description=description if description else name
                     )
                 )
@@ -1776,16 +1792,49 @@ class CharacterManagementView(discord.ui.View):
     
     async def character_selected(self, interaction: discord.Interaction):
         """Handle character selection"""
-        self.selected_index = int(interaction.data['values'][0])
+        self.selected_name = interaction.data['values'][0]
         await interaction.response.defer()
+    
+    async def refresh_view(self, interaction: discord.Interaction):
+        """Refresh the view to show updated character list"""
+        try:
+            # Update components with current state
+            self.update_components()
+            
+            # Update the original message
+            characters = self.config_manager.get_characters()
+            embed = discord.Embed(
+                title="🤖 AI Character Management",
+                description="Manage your AI characters interactively below.",
+                color=discord.Color.blue()
+            )
+            
+            if characters:
+                embed.add_field(
+                    name="Available Characters",
+                    value=f"{len(characters)} character(s) configured",
+                    inline=False
+                )
+            else:
+                embed.add_field(
+                    name="No Characters",
+                    value="Click 'Create Character' to get started!",
+                    inline=False
+                )
+            
+            if self.message:
+                await self.message.edit(embed=embed, view=self)
+        except Exception as e:
+            print(f"Error refreshing view: {str(e)}")
     
     async def create_character(self, interaction: discord.Interaction):
         """Open modal to create a new character"""
-        await interaction.response.send_modal(CreateCharacterModal(self.config_manager))
+        modal = CreateCharacterModal(self.config_manager, parent_view=self)
+        await interaction.response.send_modal(modal)
     
     async def view_character(self, interaction: discord.Interaction):
         """View details of selected character"""
-        if not hasattr(self, 'selected_index'):
+        if not self.selected_name:
             await interaction.response.send_message(
                 "⚠️ Please select a character first using the dropdown menu.",
                 ephemeral=True
@@ -1793,10 +1842,8 @@ class CharacterManagementView(discord.ui.View):
             return
         
         try:
-            characters = self.config_manager.get_characters()
-            if 0 <= self.selected_index < len(characters):
-                char = characters[self.selected_index]
-                
+            char = self.config_manager.get_character_by_name(self.selected_name)
+            if char:
                 embed = discord.Embed(
                     title=f"🤖 {char.get('display_name', 'Unknown')}",
                     description=char.get('description', 'No description'),
@@ -1826,7 +1873,7 @@ class CharacterManagementView(discord.ui.View):
     
     async def delete_character(self, interaction: discord.Interaction):
         """Delete the selected character (with confirmation)"""
-        if not hasattr(self, 'selected_index'):
+        if not self.selected_name:
             await interaction.response.send_message(
                 "⚠️ Please select a character first using the dropdown menu.",
                 ephemeral=True
@@ -1834,13 +1881,12 @@ class CharacterManagementView(discord.ui.View):
             return
         
         try:
-            characters = self.config_manager.get_characters()
-            if 0 <= self.selected_index < len(characters):
-                char = characters[self.selected_index]
+            char = self.config_manager.get_character_by_name(self.selected_name)
+            if char:
                 name = char.get('display_name', char.get('name', 'Unknown'))
                 
                 # Create confirmation view
-                confirm_view = ConfirmCharacterDeleteView(self.config_manager, self.selected_index, name)
+                confirm_view = ConfirmCharacterDeleteView(self.config_manager, self.selected_name, name, parent_view=self)
                 
                 embed = discord.Embed(
                     title="⚠️ Confirm Deletion",
@@ -1873,6 +1919,8 @@ class UserCharacterManagementView(discord.ui.View):
     def __init__(self, config_manager: ConfigManager, timeout=180):
         super().__init__(timeout=timeout)
         self.config_manager = config_manager
+        self.selected_name = None
+        self.message = None
         self.update_components()
     
     def update_components(self):
@@ -1884,14 +1932,14 @@ class UserCharacterManagementView(discord.ui.View):
         if characters:
             # Add character select menu
             options = []
-            for i, char in enumerate(characters):
+            for char in characters:
                 display_name = char.get('display_name', char.get('name', 'Unknown'))
                 name = char.get('name', 'N/A')
                 description = char.get('description', '')[:50]
                 options.append(
                     discord.SelectOption(
                         label=f"{display_name}",
-                        value=str(i),
+                        value=name,
                         description=description if description else name
                     )
                 )
@@ -1924,16 +1972,49 @@ class UserCharacterManagementView(discord.ui.View):
     
     async def character_selected(self, interaction: discord.Interaction):
         """Handle character selection"""
-        self.selected_index = int(interaction.data['values'][0])
+        self.selected_name = interaction.data['values'][0]
         await interaction.response.defer()
+    
+    async def refresh_view(self, interaction: discord.Interaction):
+        """Refresh the view to show updated user character list"""
+        try:
+            # Update components with current state
+            self.update_components()
+            
+            # Update the original message
+            characters = self.config_manager.get_user_characters()
+            embed = discord.Embed(
+                title="👥 User Character Management",
+                description="Manage your user/player characters interactively below.",
+                color=discord.Color.green()
+            )
+            
+            if characters:
+                embed.add_field(
+                    name="Available User Characters",
+                    value=f"{len(characters)} character(s) configured",
+                    inline=False
+                )
+            else:
+                embed.add_field(
+                    name="No User Characters",
+                    value="Click 'Create User Character' to get started!",
+                    inline=False
+                )
+            
+            if self.message:
+                await self.message.edit(embed=embed, view=self)
+        except Exception as e:
+            print(f"Error refreshing view: {str(e)}")
     
     async def create_character(self, interaction: discord.Interaction):
         """Open modal to create a new user character"""
-        await interaction.response.send_modal(CreateUserCharacterModal(self.config_manager))
+        modal = CreateUserCharacterModal(self.config_manager, parent_view=self)
+        await interaction.response.send_modal(modal)
     
     async def view_character(self, interaction: discord.Interaction):
         """View details of selected user character"""
-        if not hasattr(self, 'selected_index'):
+        if not self.selected_name:
             await interaction.response.send_message(
                 "⚠️ Please select a character first using the dropdown menu.",
                 ephemeral=True
@@ -1941,10 +2022,8 @@ class UserCharacterManagementView(discord.ui.View):
             return
         
         try:
-            characters = self.config_manager.get_user_characters()
-            if 0 <= self.selected_index < len(characters):
-                char = characters[self.selected_index]
-                
+            char = self.config_manager.get_user_character_by_name(self.selected_name)
+            if char:
                 embed = discord.Embed(
                     title=f"👥 {char.get('display_name', 'Unknown')}",
                     description=char.get('description', 'No description'),
@@ -1971,7 +2050,7 @@ class UserCharacterManagementView(discord.ui.View):
     
     async def delete_character(self, interaction: discord.Interaction):
         """Delete the selected user character (with confirmation)"""
-        if not hasattr(self, 'selected_index'):
+        if not self.selected_name:
             await interaction.response.send_message(
                 "⚠️ Please select a character first using the dropdown menu.",
                 ephemeral=True
@@ -1979,13 +2058,12 @@ class UserCharacterManagementView(discord.ui.View):
             return
         
         try:
-            characters = self.config_manager.get_user_characters()
-            if 0 <= self.selected_index < len(characters):
-                char = characters[self.selected_index]
+            char = self.config_manager.get_user_character_by_name(self.selected_name)
+            if char:
                 name = char.get('display_name', char.get('name', 'Unknown'))
                 
                 # Create confirmation view
-                confirm_view = ConfirmUserCharacterDeleteView(self.config_manager, self.selected_index, name)
+                confirm_view = ConfirmUserCharacterDeleteView(self.config_manager, self.selected_name, name, parent_view=self)
                 
                 embed = discord.Embed(
                     title="⚠️ Confirm Deletion",
@@ -2015,26 +2093,47 @@ class UserCharacterManagementView(discord.ui.View):
 class ConfirmCharacterDeleteView(discord.ui.View):
     """Confirmation view for deleting an AI character"""
     
-    def __init__(self, config_manager: ConfigManager, index: int, name: str, timeout=30):
+    def __init__(self, config_manager: ConfigManager, internal_name: str, display_name: str, parent_view=None, timeout=30):
         super().__init__(timeout=timeout)
         self.config_manager = config_manager
-        self.index = index
-        self.name = name
+        self.internal_name = internal_name
+        self.display_name = display_name
+        self.parent_view = parent_view
     
     @discord.ui.button(label="✅ Yes, Delete", style=discord.ButtonStyle.danger)
     async def confirm_delete(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Confirm deletion"""
         try:
-            self.config_manager.delete_character(self.index)
+            # Find character by internal name and get its index
+            characters = self.config_manager.get_characters()
+            index = None
+            for i, char in enumerate(characters):
+                if char.get('name') == self.internal_name:
+                    index = i
+                    break
             
-            embed = discord.Embed(
-                title="✅ Character Deleted",
-                description=f"Character '{self.name}' has been deleted.",
-                color=discord.Color.green()
-            )
-            
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-            self.stop()
+            if index is not None:
+                self.config_manager.delete_character(index)
+                
+                embed = discord.Embed(
+                    title="✅ Character Deleted",
+                    description=f"Character '{self.display_name}' has been deleted.",
+                    color=discord.Color.green()
+                )
+                
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                
+                # Refresh parent view if provided
+                if self.parent_view:
+                    self.parent_view.selected_name = None
+                    await self.parent_view.refresh_view(interaction)
+                
+                self.stop()
+            else:
+                await interaction.response.send_message(
+                    f"❌ Error: Character '{self.display_name}' not found.",
+                    ephemeral=True
+                )
         except Exception as e:
             await interaction.response.send_message(
                 f"❌ Error deleting character: {str(e)}",
@@ -2051,26 +2150,47 @@ class ConfirmCharacterDeleteView(discord.ui.View):
 class ConfirmUserCharacterDeleteView(discord.ui.View):
     """Confirmation view for deleting a user character"""
     
-    def __init__(self, config_manager: ConfigManager, index: int, name: str, timeout=30):
+    def __init__(self, config_manager: ConfigManager, internal_name: str, display_name: str, parent_view=None, timeout=30):
         super().__init__(timeout=timeout)
         self.config_manager = config_manager
-        self.index = index
-        self.name = name
+        self.internal_name = internal_name
+        self.display_name = display_name
+        self.parent_view = parent_view
     
     @discord.ui.button(label="✅ Yes, Delete", style=discord.ButtonStyle.danger)
     async def confirm_delete(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Confirm deletion"""
         try:
-            self.config_manager.delete_user_character(self.index)
+            # Find character by internal name and get its index
+            characters = self.config_manager.get_user_characters()
+            index = None
+            for i, char in enumerate(characters):
+                if char.get('name') == self.internal_name:
+                    index = i
+                    break
             
-            embed = discord.Embed(
-                title="✅ User Character Deleted",
-                description=f"User character '{self.name}' has been deleted.",
-                color=discord.Color.green()
-            )
-            
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-            self.stop()
+            if index is not None:
+                self.config_manager.delete_user_character(index)
+                
+                embed = discord.Embed(
+                    title="✅ User Character Deleted",
+                    description=f"User character '{self.display_name}' has been deleted.",
+                    color=discord.Color.green()
+                )
+                
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                
+                # Refresh parent view if provided
+                if self.parent_view:
+                    self.parent_view.selected_name = None
+                    await self.parent_view.refresh_view(interaction)
+                
+                self.stop()
+            else:
+                await interaction.response.send_message(
+                    f"❌ Error: User character '{self.display_name}' not found.",
+                    ephemeral=True
+                )
         except Exception as e:
             await interaction.response.send_message(
                 f"❌ Error deleting user character: {str(e)}",
