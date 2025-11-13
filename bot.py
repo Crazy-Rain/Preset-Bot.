@@ -1236,6 +1236,382 @@ class AddLorebookEntryModal(discord.ui.Modal, title="Add Lorebook Entry"):
             )
 
 
+class EditEntryModal(discord.ui.Modal, title="Edit Lorebook Entry"):
+    """Modal for editing an existing lorebook entry"""
+    
+    def __init__(self, config_manager: ConfigManager, lorebook_name: str, entry_index: int, entry: dict, parent_view=None):
+        super().__init__()
+        self.config_manager = config_manager
+        self.lorebook_name = lorebook_name
+        self.entry_index = entry_index
+        self.parent_view = parent_view
+        
+        # Pre-fill with existing values
+        self.content = discord.ui.TextInput(
+            label="Entry Content",
+            placeholder="Enter the content for this entry",
+            required=True,
+            max_length=2000,
+            style=discord.TextStyle.paragraph,
+            default=entry.get('content', '')
+        )
+        self.add_item(self.content)
+        
+        self.entry_type = discord.ui.TextInput(
+            label="Entry Type",
+            placeholder="constant or normal",
+            required=True,
+            max_length=10,
+            default=entry.get('insertion_type', 'normal')
+        )
+        self.add_item(self.entry_type)
+        
+        keywords_str = ", ".join(entry.get('keywords', []))
+        self.keywords = discord.ui.TextInput(
+            label="Keywords (for normal entries)",
+            placeholder="keyword1, keyword2, keyword3",
+            required=False,
+            max_length=200,
+            default=keywords_str
+        )
+        self.add_item(self.keywords)
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        """Handle form submission"""
+        try:
+            content = self.content.value.strip()
+            entry_type = self.entry_type.value.strip().lower()
+            
+            # Validate entry type
+            if entry_type not in ["constant", "normal"]:
+                await interaction.response.send_message(
+                    "❌ Error: Entry type must be 'constant' or 'normal'.",
+                    ephemeral=True
+                )
+                return
+            
+            # Parse keywords
+            keywords = []
+            if entry_type == "normal" and self.keywords.value:
+                keywords = [k.strip() for k in self.keywords.value.split(",") if k.strip()]
+            
+            # Update entry
+            lorebook = self.config_manager.get_lorebook_by_name(self.lorebook_name)
+            if lorebook and 0 <= self.entry_index < len(lorebook.get('entries', [])):
+                lorebook['entries'][self.entry_index] = {
+                    'content': content,
+                    'insertion_type': entry_type,
+                    'keywords': keywords
+                }
+                self.config_manager.save_config()
+                
+                embed = discord.Embed(
+                    title="✅ Entry Updated",
+                    description=f"Entry updated in lorebook '{self.lorebook_name}'",
+                    color=discord.Color.green()
+                )
+                embed.add_field(name="Type", value=entry_type.upper(), inline=True)
+                if keywords:
+                    embed.add_field(name="Keywords", value=", ".join(keywords), inline=True)
+                embed.add_field(name="Content", value=content[:100] + "..." if len(content) > 100 else content, inline=False)
+                
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                
+                # Refresh parent view if provided
+                if self.parent_view:
+                    await self.parent_view.refresh_view(interaction)
+            else:
+                await interaction.response.send_message(
+                    f"❌ Error: Could not update entry in lorebook '{self.lorebook_name}'.",
+                    ephemeral=True
+                )
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error updating entry: {str(e)}",
+                ephemeral=True
+            )
+
+
+class EntryEditView(discord.ui.View):
+    """View for selecting an entry to edit"""
+    
+    def __init__(self, config_manager: ConfigManager, lorebook_name: str, parent_view=None, timeout=180):
+        super().__init__(timeout=timeout)
+        self.config_manager = config_manager
+        self.lorebook_name = lorebook_name
+        self.parent_view = parent_view
+        
+        lorebook = config_manager.get_lorebook_by_name(lorebook_name)
+        if lorebook and lorebook.get('entries'):
+            entries = lorebook['entries']
+            
+            # Create select menu with entries
+            options = []
+            for i, entry in enumerate(entries):
+                content = entry.get('content', 'No content')
+                entry_type = entry.get('insertion_type', 'normal')
+                label = f"{entry_type.upper()[:4]} | {content[:40]}"
+                if len(content) > 40:
+                    label += "..."
+                
+                options.append(
+                    discord.SelectOption(
+                        label=label,
+                        value=str(i),
+                        description=f"Entry {i+1} of {len(entries)}"
+                    )
+                )
+            
+            select = discord.ui.Select(
+                placeholder="Select an entry to edit",
+                options=options,
+                row=0
+            )
+            select.callback = self.entry_selected
+            self.add_item(select)
+        
+        # Add close button
+        close_btn = discord.ui.Button(label="❌ Cancel", style=discord.ButtonStyle.secondary, row=1)
+        close_btn.callback = self.close
+        self.add_item(close_btn)
+    
+    async def entry_selected(self, interaction: discord.Interaction):
+        """Handle entry selection"""
+        entry_index = int(interaction.data['values'][0])
+        lorebook = self.config_manager.get_lorebook_by_name(self.lorebook_name)
+        
+        if lorebook and 0 <= entry_index < len(lorebook.get('entries', [])):
+            entry = lorebook['entries'][entry_index]
+            modal = EditEntryModal(self.config_manager, self.lorebook_name, entry_index, entry, parent_view=self.parent_view)
+            await interaction.response.send_modal(modal)
+        else:
+            await interaction.response.send_message(
+                "❌ Error: Invalid entry selection.",
+                ephemeral=True
+            )
+    
+    async def close(self, interaction: discord.Interaction):
+        """Close the entry edit view"""
+        await interaction.response.send_message("Entry editing cancelled.", ephemeral=True)
+        self.stop()
+
+
+class SearchLorebookModal(discord.ui.Modal, title="Search Lorebooks"):
+    """Modal for searching lorebooks"""
+    
+    def __init__(self, config_manager: ConfigManager):
+        super().__init__()
+        self.config_manager = config_manager
+        
+        self.search_term = discord.ui.TextInput(
+            label="Search Term",
+            placeholder="Enter lorebook name or entry content to search",
+            required=True,
+            max_length=100
+        )
+        self.add_item(self.search_term)
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        """Handle search submission"""
+        try:
+            term = self.search_term.value.strip().lower()
+            lorebooks = self.config_manager.get_lorebooks()
+            
+            results = []
+            for lorebook in lorebooks:
+                name = lorebook.get('name', '')
+                # Search in name
+                if term in name.lower():
+                    results.append((lorebook, 'name'))
+                    continue
+                
+                # Search in entry content
+                for entry in lorebook.get('entries', []):
+                    content = entry.get('content', '').lower()
+                    if term in content:
+                        results.append((lorebook, 'entry'))
+                        break
+            
+            if results:
+                embed = discord.Embed(
+                    title=f"🔍 Search Results for '{self.search_term.value}'",
+                    description=f"Found {len(results)} lorebook(s)",
+                    color=discord.Color.blue()
+                )
+                
+                # Show max 10 results
+                for i, (lorebook, match_type) in enumerate(results[:10]):
+                    name = lorebook.get('name', 'Unknown')
+                    active = lorebook.get('active', False)
+                    status_icon = "🟢" if active else "🔴"
+                    entry_count = len(lorebook.get('entries', []))
+                    
+                    match_info = "name match" if match_type == 'name' else "entry match"
+                    value = f"{status_icon} {entry_count} entries | {match_info}"
+                    
+                    embed.add_field(
+                        name=f"{i+1}. {name}",
+                        value=value,
+                        inline=False
+                    )
+                
+                if len(results) > 10:
+                    embed.set_footer(text=f"Showing 10 of {len(results)} results")
+            else:
+                embed = discord.Embed(
+                    title=f"🔍 Search Results for '{self.search_term.value}'",
+                    description="No lorebooks found matching your search.",
+                    color=discord.Color.orange()
+                )
+            
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error searching: {str(e)}",
+                ephemeral=True
+            )
+
+
+class SearchCharacterModal(discord.ui.Modal, title="Search Characters"):
+    """Modal for searching AI characters"""
+    
+    def __init__(self, config_manager: ConfigManager):
+        super().__init__()
+        self.config_manager = config_manager
+        
+        self.search_term = discord.ui.TextInput(
+            label="Search Term",
+            placeholder="Enter character name or description to search",
+            required=True,
+            max_length=100
+        )
+        self.add_item(self.search_term)
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        """Handle search submission"""
+        try:
+            term = self.search_term.value.strip().lower()
+            characters = self.config_manager.get_characters()
+            
+            results = []
+            for char in characters:
+                name = char.get('name', '').lower()
+                display_name = char.get('display_name', '').lower()
+                description = char.get('description', '').lower()
+                
+                if term in name or term in display_name or term in description:
+                    results.append(char)
+            
+            if results:
+                embed = discord.Embed(
+                    title=f"🔍 Search Results for '{self.search_term.value}'",
+                    description=f"Found {len(results)} character(s)",
+                    color=discord.Color.blue()
+                )
+                
+                # Show max 10 results
+                for i, char in enumerate(results[:10]):
+                    name = char.get('name', 'Unknown')
+                    display_name = char.get('display_name', name)
+                    description = char.get('description', 'No description')[:50]
+                    
+                    value = f"**Display:** {display_name}\n{description}"
+                    if len(char.get('description', '')) > 50:
+                        value += "..."
+                    
+                    embed.add_field(
+                        name=f"{i+1}. {name}",
+                        value=value,
+                        inline=False
+                    )
+                
+                if len(results) > 10:
+                    embed.set_footer(text=f"Showing 10 of {len(results)} results")
+            else:
+                embed = discord.Embed(
+                    title=f"🔍 Search Results for '{self.search_term.value}'",
+                    description="No characters found matching your search.",
+                    color=discord.Color.orange()
+                )
+            
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error searching: {str(e)}",
+                ephemeral=True
+            )
+
+
+class SearchUserCharacterModal(discord.ui.Modal, title="Search User Characters"):
+    """Modal for searching user characters"""
+    
+    def __init__(self, config_manager: ConfigManager):
+        super().__init__()
+        self.config_manager = config_manager
+        
+        self.search_term = discord.ui.TextInput(
+            label="Search Term",
+            placeholder="Enter character name or description to search",
+            required=True,
+            max_length=100
+        )
+        self.add_item(self.search_term)
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        """Handle search submission"""
+        try:
+            term = self.search_term.value.strip().lower()
+            characters = self.config_manager.get_user_characters()
+            
+            results = []
+            for char in characters:
+                name = char.get('name', '').lower()
+                display_name = char.get('display_name', '').lower()
+                description = char.get('description', '').lower()
+                
+                if term in name or term in display_name or term in description:
+                    results.append(char)
+            
+            if results:
+                embed = discord.Embed(
+                    title=f"🔍 Search Results for '{self.search_term.value}'",
+                    description=f"Found {len(results)} user character(s)",
+                    color=discord.Color.blue()
+                )
+                
+                # Show max 10 results
+                for i, char in enumerate(results[:10]):
+                    name = char.get('name', 'Unknown')
+                    display_name = char.get('display_name', name)
+                    description = char.get('description', 'No description')[:50]
+                    
+                    value = f"**Display:** {display_name}\n{description}"
+                    if len(char.get('description', '')) > 50:
+                        value += "..."
+                    
+                    embed.add_field(
+                        name=f"{i+1}. {name}",
+                        value=value,
+                        inline=False
+                    )
+                
+                if len(results) > 10:
+                    embed.set_footer(text=f"Showing 10 of {len(results)} results")
+            else:
+                embed = discord.Embed(
+                    title=f"🔍 Search Results for '{self.search_term.value}'",
+                    description="No user characters found matching your search.",
+                    color=discord.Color.orange()
+                )
+            
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error searching: {str(e)}",
+                ephemeral=True
+            )
+
+
 class LorebookManagementView(discord.ui.View):
     """Interactive view for managing lorebooks"""
     
@@ -1297,6 +1673,17 @@ class LorebookManagementView(discord.ui.View):
             add_entry_btn.callback = self.add_entry
             self.add_item(add_entry_btn)
             
+            edit_entry_btn = discord.ui.Button(label="✏️ Edit Entry", style=discord.ButtonStyle.primary, row=2)
+            edit_entry_btn.callback = self.edit_entry
+            # Disable button if no lorebook selected or no entries
+            if not self.selected_name:
+                edit_entry_btn.disabled = True
+            else:
+                lorebook = self.config_manager.get_lorebook_by_name(self.selected_name)
+                if not lorebook or not lorebook.get('entries'):
+                    edit_entry_btn.disabled = True
+            self.add_item(edit_entry_btn)
+            
             view_entries_btn = discord.ui.Button(label="👁️ View Entries", style=discord.ButtonStyle.secondary, row=2)
             view_entries_btn.callback = self.view_entries
             self.add_item(view_entries_btn)
@@ -1308,6 +1695,11 @@ class LorebookManagementView(discord.ui.View):
             delete_btn = discord.ui.Button(label="🗑️ Delete Lorebook", style=discord.ButtonStyle.danger, row=2)
             delete_btn.callback = self.delete_lorebook
             self.add_item(delete_btn)
+        
+        # Add search button (row 3)
+        search_btn = discord.ui.Button(label="🔍 Search", style=discord.ButtonStyle.secondary, row=3)
+        search_btn.callback = self.search_lorebooks
+        self.add_item(search_btn)
         
         # Add help button
         help_btn = discord.ui.Button(label="ℹ️ Help", style=discord.ButtonStyle.secondary, row=3)
@@ -1477,6 +1869,45 @@ class LorebookManagementView(discord.ui.View):
                 ephemeral=True
             )
     
+    async def edit_entry(self, interaction: discord.Interaction):
+        """Open view to edit entries in selected lorebook"""
+        if not self.selected_name:
+            await interaction.response.send_message(
+                "⚠️ Please select a lorebook first using the dropdown menu.",
+                ephemeral=True
+            )
+            return
+        
+        try:
+            lorebook = self.config_manager.get_lorebook_by_name(self.selected_name)
+            if lorebook:
+                entries = lorebook.get('entries', [])
+                if not entries:
+                    await interaction.response.send_message(
+                        f"⚠️ Lorebook '{self.selected_name}' has no entries to edit.",
+                        ephemeral=True
+                    )
+                    return
+                
+                # Create entry edit view
+                view = EntryEditView(self.config_manager, self.selected_name, parent_view=self)
+                embed = discord.Embed(
+                    title=f"✏️ Edit Entry - {self.selected_name}",
+                    description=f"Select an entry to edit ({len(entries)} total)",
+                    color=discord.Color.blue()
+                )
+                await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+            else:
+                await interaction.response.send_message(
+                    "❌ Invalid lorebook selection.",
+                    ephemeral=True
+                )
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error opening entry editor: {str(e)}",
+                ephemeral=True
+            )
+    
     async def view_entries(self, interaction: discord.Interaction):
         """View entries in the selected lorebook"""
         if not self.selected_name:
@@ -1634,6 +2065,11 @@ class LorebookManagementView(discord.ui.View):
                 f"❌ Error deleting lorebook: {str(e)}",
                 ephemeral=True
             )
+    
+    async def search_lorebooks(self, interaction: discord.Interaction):
+        """Open search modal for lorebooks"""
+        modal = SearchLorebookModal(self.config_manager)
+        await interaction.response.send_modal(modal)
     
     async def show_help(self, interaction: discord.Interaction):
         """Show help information for lorebook management"""
@@ -1972,6 +2408,11 @@ class CharacterManagementView(discord.ui.View):
             delete_btn.callback = self.delete_character
             self.add_item(delete_btn)
         
+        # Add search button
+        search_btn = discord.ui.Button(label="🔍 Search", style=discord.ButtonStyle.secondary, row=2)
+        search_btn.callback = self.search_characters
+        self.add_item(search_btn)
+        
         # Add help button
         help_btn = discord.ui.Button(label="ℹ️ Help", style=discord.ButtonStyle.secondary, row=2)
         help_btn.callback = self.show_help
@@ -2091,9 +2532,15 @@ class CharacterManagementView(discord.ui.View):
                 if char.get('scenario'):
                     embed.add_field(name="Scenario", value=char.get('scenario')[:200], inline=False)
                 
-                if char.get('avatar_url'):
-                    embed.add_field(name="Avatar URL", value=char.get('avatar_url'), inline=False)
-                    embed.set_thumbnail(url=char.get('avatar_url'))
+                # Avatar preview with placeholder
+                avatar_url = char.get('avatar_url', '')
+                if avatar_url:
+                    embed.add_field(name="Avatar", value=f"[View Full Size]({avatar_url})", inline=False)
+                    embed.set_thumbnail(url=avatar_url)
+                else:
+                    placeholder_url = "https://via.placeholder.com/150?text=No+Avatar"
+                    embed.add_field(name="Avatar", value="No avatar set", inline=False)
+                    embed.set_thumbnail(url=placeholder_url)
                 
                 await interaction.response.send_message(embed=embed, ephemeral=True)
             else:
@@ -2197,6 +2644,11 @@ class CharacterManagementView(discord.ui.View):
                 ephemeral=True
             )
     
+    async def search_characters(self, interaction: discord.Interaction):
+        """Open search modal for AI characters"""
+        modal = SearchCharacterModal(self.config_manager)
+        await interaction.response.send_modal(modal)
+    
     async def show_help(self, interaction: discord.Interaction):
         """Show help information for AI character management"""
         embed = discord.Embed(
@@ -2299,6 +2751,11 @@ class UserCharacterManagementView(discord.ui.View):
             delete_btn = discord.ui.Button(label="🗑️ Delete Character", style=discord.ButtonStyle.danger, row=1)
             delete_btn.callback = self.delete_character
             self.add_item(delete_btn)
+        
+        # Add search button
+        search_btn = discord.ui.Button(label="🔍 Search", style=discord.ButtonStyle.secondary, row=2)
+        search_btn.callback = self.search_user_characters
+        self.add_item(search_btn)
         
         # Add help button
         help_btn = discord.ui.Button(label="ℹ️ Help", style=discord.ButtonStyle.secondary, row=2)
@@ -2416,9 +2873,15 @@ class UserCharacterManagementView(discord.ui.View):
                 embed.add_field(name="Internal Name", value=char.get('name', 'N/A'), inline=True)
                 embed.add_field(name="Display Name", value=char.get('display_name', 'N/A'), inline=True)
                 
-                if char.get('avatar_url'):
-                    embed.add_field(name="Avatar URL", value=char.get('avatar_url'), inline=False)
-                    embed.set_thumbnail(url=char.get('avatar_url'))
+                # Avatar preview with placeholder
+                avatar_url = char.get('avatar_url', '')
+                if avatar_url:
+                    embed.add_field(name="Avatar", value=f"[View Full Size]({avatar_url})", inline=False)
+                    embed.set_thumbnail(url=avatar_url)
+                else:
+                    placeholder_url = "https://via.placeholder.com/150?text=No+Avatar"
+                    embed.add_field(name="Avatar", value="No avatar set", inline=False)
+                    embed.set_thumbnail(url=placeholder_url)
                 
                 await interaction.response.send_message(embed=embed, ephemeral=True)
             else:
@@ -2467,6 +2930,11 @@ class UserCharacterManagementView(discord.ui.View):
                 f"❌ Error deleting character: {str(e)}",
                 ephemeral=True
             )
+    
+    async def search_user_characters(self, interaction: discord.Interaction):
+        """Open search modal for user characters"""
+        modal = SearchUserCharacterModal(self.config_manager)
+        await interaction.response.send_modal(modal)
     
     async def show_help(self, interaction: discord.Interaction):
         """Show help information for user character management"""
