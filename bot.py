@@ -1301,9 +1301,18 @@ class LorebookManagementView(discord.ui.View):
             view_entries_btn.callback = self.view_entries
             self.add_item(view_entries_btn)
             
+            duplicate_btn = discord.ui.Button(label="📋 Duplicate", style=discord.ButtonStyle.secondary, row=2)
+            duplicate_btn.callback = self.duplicate_lorebook
+            self.add_item(duplicate_btn)
+            
             delete_btn = discord.ui.Button(label="🗑️ Delete Lorebook", style=discord.ButtonStyle.danger, row=2)
             delete_btn.callback = self.delete_lorebook
             self.add_item(delete_btn)
+        
+        # Add help button
+        help_btn = discord.ui.Button(label="ℹ️ Help", style=discord.ButtonStyle.secondary, row=3)
+        help_btn.callback = self.show_help
+        self.add_item(help_btn)
         
         # Add pagination buttons if needed
         total_pages = (len(lorebooks) + self.items_per_page - 1) // self.items_per_page if lorebooks else 1
@@ -1533,6 +1542,62 @@ class LorebookManagementView(discord.ui.View):
                 ephemeral=True
             )
     
+    
+    async def duplicate_lorebook(self, interaction: discord.Interaction):
+        """Duplicate the selected lorebook"""
+        if not self.selected_name:
+            await interaction.response.send_message(
+                "⚠️ Please select a lorebook first using the dropdown menu.",
+                ephemeral=True
+            )
+            return
+        
+        try:
+            lorebook = self.config_manager.get_lorebook_by_name(self.selected_name)
+            if lorebook:
+                # Generate unique name
+                base_name = lorebook.get('name', 'Unknown')
+                new_name = f"{base_name}_copy"
+                counter = 1
+                while self.config_manager.get_lorebook_by_name(new_name):
+                    new_name = f"{base_name}_copy_{counter}"
+                    counter += 1
+                
+                # Create duplicate lorebook (inactive by default)
+                self.config_manager.add_lorebook(new_name, active=False)
+                
+                # Copy all entries
+                entries = lorebook.get('entries', [])
+                for entry in entries:
+                    content = entry.get('content', '')
+                    entry_type = entry.get('insertion_type', 'normal')
+                    keywords = entry.get('keywords', [])
+                    self.config_manager.add_lorebook_entry(new_name, content, entry_type, keywords)
+                
+                embed = discord.Embed(
+                    title="✅ Lorebook Duplicated",
+                    description=f"Successfully duplicated lorebook",
+                    color=discord.Color.green()
+                )
+                embed.add_field(name="Original", value=base_name, inline=True)
+                embed.add_field(name="Duplicate", value=new_name, inline=True)
+                embed.add_field(name="Entries Copied", value=str(len(entries)), inline=True)
+                embed.set_footer(text="The duplicate is inactive by default")
+                
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                # Refresh the view to show the new duplicate
+                await self.refresh_view(interaction)
+            else:
+                await interaction.response.send_message(
+                    "❌ Invalid lorebook selection.",
+                    ephemeral=True
+                )
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error duplicating lorebook: {str(e)}",
+                ephemeral=True
+            )
+    
     async def delete_lorebook(self, interaction: discord.Interaction):
         """Delete the selected lorebook (with confirmation)"""
         if not self.selected_name:
@@ -1569,6 +1634,54 @@ class LorebookManagementView(discord.ui.View):
                 f"❌ Error deleting lorebook: {str(e)}",
                 ephemeral=True
             )
+    
+    async def show_help(self, interaction: discord.Interaction):
+        """Show help information for lorebook management"""
+        embed = discord.Embed(
+            title="ℹ️ Lorebook Management Help",
+            description="Learn how to use the lorebook management interface",
+            color=discord.Color.blue()
+        )
+        
+        embed.add_field(
+            name="➕ Create Lorebook",
+            value="Creates a new lorebook. Enter a unique name when prompted.",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="🔄 Toggle Active/Inactive",
+            value="Toggles the active state of the selected lorebook. Active lorebooks are used in conversations.",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="📝 Add Entry",
+            value="Add a new entry to the selected lorebook. Choose 'constant' for always-active entries, or 'normal' for keyword-triggered entries.",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="👁️ View Entries",
+            value="View all entries in the selected lorebook with their types and keywords.",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="📋 Duplicate",
+            value="Create a copy of the selected lorebook with all its entries. The copy will be inactive by default.",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="🗑️ Delete Lorebook",
+            value="⚠️ WARNING: Permanently deletes the selected lorebook and all its entries. This action cannot be undone!",
+            inline=False
+        )
+        
+        embed.set_footer(text="💡 Best Practice: Always back up your config.json before making major changes")
+        
+        await interaction.response.send_message(embed=embed, ephemeral=True)
     
     async def close(self, interaction: discord.Interaction):
         """Close the management view"""
@@ -1851,9 +1964,18 @@ class CharacterManagementView(discord.ui.View):
             view_btn.callback = self.view_character
             self.add_item(view_btn)
             
+            duplicate_btn = discord.ui.Button(label="📋 Duplicate", style=discord.ButtonStyle.secondary, row=1)
+            duplicate_btn.callback = self.duplicate_character
+            self.add_item(duplicate_btn)
+            
             delete_btn = discord.ui.Button(label="🗑️ Delete Character", style=discord.ButtonStyle.danger, row=1)
             delete_btn.callback = self.delete_character
             self.add_item(delete_btn)
+        
+        # Add help button
+        help_btn = discord.ui.Button(label="ℹ️ Help", style=discord.ButtonStyle.secondary, row=2)
+        help_btn.callback = self.show_help
+        self.add_item(help_btn)
         
         # Add pagination buttons if needed
         total_pages = (len(characters) + self.items_per_page - 1) // self.items_per_page if characters else 1
@@ -1985,6 +2107,60 @@ class CharacterManagementView(discord.ui.View):
                 ephemeral=True
             )
     
+    async def duplicate_character(self, interaction: discord.Interaction):
+        """Duplicate the selected character"""
+        if not self.selected_name:
+            await interaction.response.send_message(
+                "⚠️ Please select a character first using the dropdown menu.",
+                ephemeral=True
+            )
+            return
+        
+        try:
+            char = self.config_manager.get_character_by_name(self.selected_name)
+            if char:
+                # Generate unique name
+                base_name = char.get('name', 'Unknown')
+                new_name = f"{base_name}_copy"
+                counter = 1
+                while self.config_manager.get_character_by_name(new_name):
+                    new_name = f"{base_name}_copy_{counter}"
+                    counter += 1
+                
+                # Create duplicate character
+                display_name = char.get('display_name', base_name) + " (Copy)"
+                description = char.get('description', '')
+                avatar_url = char.get('avatar_url', '')
+                avatar_file = char.get('avatar_file', '')
+                scenario = char.get('scenario', '')
+                
+                self.config_manager.add_character(
+                    new_name, display_name, description,
+                    avatar_url=avatar_url, avatar_file=avatar_file, scenario=scenario
+                )
+                
+                embed = discord.Embed(
+                    title="✅ Character Duplicated",
+                    description=f"Successfully duplicated character",
+                    color=discord.Color.green()
+                )
+                embed.add_field(name="Original", value=base_name, inline=True)
+                embed.add_field(name="Duplicate", value=new_name, inline=True)
+                
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                # Refresh the view to show the new duplicate
+                await self.refresh_view(interaction)
+            else:
+                await interaction.response.send_message(
+                    "❌ Invalid character selection.",
+                    ephemeral=True
+                )
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error duplicating character: {str(e)}",
+                ephemeral=True
+            )
+    
     async def delete_character(self, interaction: discord.Interaction):
         """Delete the selected character (with confirmation)"""
         if not self.selected_name:
@@ -2020,6 +2196,42 @@ class CharacterManagementView(discord.ui.View):
                 f"❌ Error deleting character: {str(e)}",
                 ephemeral=True
             )
+    
+    async def show_help(self, interaction: discord.Interaction):
+        """Show help information for AI character management"""
+        embed = discord.Embed(
+            title="ℹ️ AI Character Management Help",
+            description="Learn how to use the AI character management interface",
+            color=discord.Color.blue()
+        )
+        
+        embed.add_field(
+            name="➕ Create Character",
+            value="Creates a new AI character. Provide an internal name, display name, system prompt, and optional avatar URL.",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="👁️ View Details",
+            value="View full details of the selected character including system prompt and avatar.",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="📋 Duplicate",
+            value="Create a copy of the selected character with all its properties. Useful for creating variations.",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="🗑️ Delete Character",
+            value="⚠️ WARNING: Permanently deletes the selected character. This action cannot be undone!",
+            inline=False
+        )
+        
+        embed.set_footer(text="💡 Best Practice: Always back up your config.json before making major changes")
+        
+        await interaction.response.send_message(embed=embed, ephemeral=True)
     
     async def close(self, interaction: discord.Interaction):
         """Close the management view"""
@@ -2087,6 +2299,11 @@ class UserCharacterManagementView(discord.ui.View):
             delete_btn = discord.ui.Button(label="🗑️ Delete Character", style=discord.ButtonStyle.danger, row=1)
             delete_btn.callback = self.delete_character
             self.add_item(delete_btn)
+        
+        # Add help button
+        help_btn = discord.ui.Button(label="ℹ️ Help", style=discord.ButtonStyle.secondary, row=2)
+        help_btn.callback = self.show_help
+        self.add_item(help_btn)
         
         # Add pagination buttons if needed
         total_pages = (len(characters) + self.items_per_page - 1) // self.items_per_page if characters else 1
@@ -2250,6 +2467,36 @@ class UserCharacterManagementView(discord.ui.View):
                 f"❌ Error deleting character: {str(e)}",
                 ephemeral=True
             )
+    
+    async def show_help(self, interaction: discord.Interaction):
+        """Show help information for user character management"""
+        embed = discord.Embed(
+            title="ℹ️ User Character Management Help",
+            description="Learn how to use the user/player character management interface",
+            color=discord.Color.blue()
+        )
+        
+        embed.add_field(
+            name="➕ Create User Character",
+            value="Creates a new user/player character. Provide an internal name, display name, description, and optional avatar URL.",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="👁️ View Details",
+            value="View full details of the selected user character including description and avatar.",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="🗑️ Delete Character",
+            value="⚠️ WARNING: Permanently deletes the selected user character. This action cannot be undone!",
+            inline=False
+        )
+        
+        embed.set_footer(text="💡 Best Practice: Always back up your config.json before making major changes")
+        
+        await interaction.response.send_message(embed=embed, ephemeral=True)
     
     async def close(self, interaction: discord.Interaction):
         """Close the management view"""
