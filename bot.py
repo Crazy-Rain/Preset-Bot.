@@ -962,6 +962,8 @@ class ConfigMenuView(discord.ui.View):
             
             view = LorebookManagementView(self.config_manager)
             await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+            # Store the message for refresh capability
+            view.message = await interaction.original_response()
         except Exception as e:
             await interaction.response.send_message(
                 f"Error opening lorebook management: {str(e)}", 
@@ -1100,9 +1102,10 @@ class OpenAIConfigModal(discord.ui.Modal, title="Configure OpenAI Settings"):
 class CreateLorebookModal(discord.ui.Modal, title="Create New Lorebook"):
     """Modal for creating a new lorebook"""
     
-    def __init__(self, config_manager: ConfigManager):
+    def __init__(self, config_manager: ConfigManager, parent_view=None):
         super().__init__()
         self.config_manager = config_manager
+        self.parent_view = parent_view
         
         self.name = discord.ui.TextInput(
             label="Lorebook Name",
@@ -1135,6 +1138,10 @@ class CreateLorebookModal(discord.ui.Modal, title="Create New Lorebook"):
             )
             
             await interaction.response.send_message(embed=embed, ephemeral=True)
+            
+            # Refresh parent view if provided
+            if self.parent_view:
+                await self.parent_view.refresh_view(interaction)
         except Exception as e:
             await interaction.response.send_message(
                 f"❌ Error creating lorebook: {str(e)}",
@@ -1145,10 +1152,11 @@ class CreateLorebookModal(discord.ui.Modal, title="Create New Lorebook"):
 class AddLorebookEntryModal(discord.ui.Modal, title="Add Lorebook Entry"):
     """Modal for adding a new lorebook entry"""
     
-    def __init__(self, config_manager: ConfigManager, lorebook_name: str):
+    def __init__(self, config_manager: ConfigManager, lorebook_name: str, parent_view=None):
         super().__init__()
         self.config_manager = config_manager
         self.lorebook_name = lorebook_name
+        self.parent_view = parent_view
         
         self.content = discord.ui.TextInput(
             label="Entry Content",
@@ -1208,6 +1216,10 @@ class AddLorebookEntryModal(discord.ui.Modal, title="Add Lorebook Entry"):
                 embed.add_field(name="Content", value=content[:100] + "..." if len(content) > 100 else content, inline=False)
                 
                 await interaction.response.send_message(embed=embed, ephemeral=True)
+                
+                # Refresh parent view if provided
+                if self.parent_view:
+                    await self.parent_view.refresh_view(interaction)
             else:
                 await interaction.response.send_message(
                     f"❌ Error: Could not add entry to lorebook '{self.lorebook_name}'.",
@@ -1226,6 +1238,8 @@ class LorebookManagementView(discord.ui.View):
     def __init__(self, config_manager: ConfigManager, timeout=180):
         super().__init__(timeout=timeout)
         self.config_manager = config_manager
+        self.selected_name = None
+        self.message = None
         self.update_components()
     
     def update_components(self):
@@ -1237,13 +1251,14 @@ class LorebookManagementView(discord.ui.View):
         if lorebooks:
             # Add lorebook select menu
             options = []
-            for i, lb in enumerate(lorebooks):
+            for lb in lorebooks:
                 status = "✅" if lb.get("active", False) else "❌"
                 entry_count = len(lb.get("entries", []))
+                name = lb.get('name', 'Unknown')
                 options.append(
                     discord.SelectOption(
-                        label=f"{status} {lb.get('name', 'Unknown')}",
-                        value=str(i),
+                        label=f"{status} {name}",
+                        value=name,
                         description=f"{entry_count} entries"
                     )
                 )
@@ -1284,17 +1299,50 @@ class LorebookManagementView(discord.ui.View):
     
     async def lorebook_selected(self, interaction: discord.Interaction):
         """Handle lorebook selection"""
-        # Store the selected index for other button actions
-        self.selected_index = int(interaction.data['values'][0])
+        # Store the selected name for other button actions
+        self.selected_name = interaction.data['values'][0]
         await interaction.response.defer()
+    
+    async def refresh_view(self, interaction: discord.Interaction):
+        """Refresh the view to show updated lorebook list"""
+        try:
+            # Update components with current state
+            self.update_components()
+            
+            # Update the original message
+            lorebooks = self.config_manager.get_lorebooks()
+            embed = discord.Embed(
+                title="📚 Lorebook Management",
+                description="Manage your lorebooks interactively below.",
+                color=discord.Color.purple()
+            )
+            
+            if lorebooks:
+                embed.add_field(
+                    name="Available Lorebooks",
+                    value=f"{len(lorebooks)} lorebook(s) configured",
+                    inline=False
+                )
+            else:
+                embed.add_field(
+                    name="No Lorebooks",
+                    value="Click 'Create Lorebook' to get started!",
+                    inline=False
+                )
+            
+            if self.message:
+                await self.message.edit(embed=embed, view=self)
+        except Exception as e:
+            print(f"Error refreshing view: {str(e)}")
     
     async def create_lorebook(self, interaction: discord.Interaction):
         """Open modal to create a new lorebook"""
-        await interaction.response.send_modal(CreateLorebookModal(self.config_manager))
+        modal = CreateLorebookModal(self.config_manager, parent_view=self)
+        await interaction.response.send_modal(modal)
     
     async def toggle_lorebook(self, interaction: discord.Interaction):
         """Toggle the active state of selected lorebook"""
-        if not hasattr(self, 'selected_index'):
+        if not self.selected_name:
             await interaction.response.send_message(
                 "⚠️ Please select a lorebook first using the dropdown menu.",
                 ephemeral=True
@@ -1302,23 +1350,23 @@ class LorebookManagementView(discord.ui.View):
             return
         
         try:
-            lorebooks = self.config_manager.get_lorebooks()
-            if 0 <= self.selected_index < len(lorebooks):
-                lorebook = lorebooks[self.selected_index]
-                name = lorebook.get('name', 'Unknown')
+            lorebook = self.config_manager.get_lorebook_by_name(self.selected_name)
+            if lorebook:
                 current_status = lorebook.get('active', False)
                 new_status = not current_status
                 
-                self.config_manager.toggle_lorebook_active(name, new_status)
+                self.config_manager.toggle_lorebook_active(self.selected_name, new_status)
                 
                 status_text = "activated" if new_status else "deactivated"
                 embed = discord.Embed(
                     title="✅ Lorebook Updated",
-                    description=f"Lorebook '{name}' has been {status_text}.",
+                    description=f"Lorebook '{self.selected_name}' has been {status_text}.",
                     color=discord.Color.green() if new_status else discord.Color.orange()
                 )
                 
                 await interaction.response.send_message(embed=embed, ephemeral=True)
+                # Refresh the view to show updated status
+                await self.refresh_view(interaction)
             else:
                 await interaction.response.send_message(
                     "❌ Invalid lorebook selection.",
@@ -1332,7 +1380,7 @@ class LorebookManagementView(discord.ui.View):
     
     async def add_entry(self, interaction: discord.Interaction):
         """Open modal to add an entry to selected lorebook"""
-        if not hasattr(self, 'selected_index'):
+        if not self.selected_name:
             await interaction.response.send_message(
                 "⚠️ Please select a lorebook first using the dropdown menu.",
                 ephemeral=True
@@ -1340,11 +1388,10 @@ class LorebookManagementView(discord.ui.View):
             return
         
         try:
-            lorebooks = self.config_manager.get_lorebooks()
-            if 0 <= self.selected_index < len(lorebooks):
-                lorebook = lorebooks[self.selected_index]
-                name = lorebook.get('name', 'Unknown')
-                await interaction.response.send_modal(AddLorebookEntryModal(self.config_manager, name))
+            lorebook = self.config_manager.get_lorebook_by_name(self.selected_name)
+            if lorebook:
+                modal = AddLorebookEntryModal(self.config_manager, self.selected_name, parent_view=self)
+                await interaction.response.send_modal(modal)
             else:
                 await interaction.response.send_message(
                     "❌ Invalid lorebook selection.",
@@ -1358,7 +1405,7 @@ class LorebookManagementView(discord.ui.View):
     
     async def view_entries(self, interaction: discord.Interaction):
         """View entries in the selected lorebook"""
-        if not hasattr(self, 'selected_index'):
+        if not self.selected_name:
             await interaction.response.send_message(
                 "⚠️ Please select a lorebook first using the dropdown menu.",
                 ephemeral=True
@@ -1366,9 +1413,8 @@ class LorebookManagementView(discord.ui.View):
             return
         
         try:
-            lorebooks = self.config_manager.get_lorebooks()
-            if 0 <= self.selected_index < len(lorebooks):
-                lorebook = lorebooks[self.selected_index]
+            lorebook = self.config_manager.get_lorebook_by_name(self.selected_name)
+            if lorebook:
                 name = lorebook.get('name', 'Unknown')
                 entries = lorebook.get('entries', [])
                 active = lorebook.get('active', False)
@@ -1424,7 +1470,7 @@ class LorebookManagementView(discord.ui.View):
     
     async def delete_lorebook(self, interaction: discord.Interaction):
         """Delete the selected lorebook (with confirmation)"""
-        if not hasattr(self, 'selected_index'):
+        if not self.selected_name:
             await interaction.response.send_message(
                 "⚠️ Please select a lorebook first using the dropdown menu.",
                 ephemeral=True
@@ -1432,14 +1478,13 @@ class LorebookManagementView(discord.ui.View):
             return
         
         try:
-            lorebooks = self.config_manager.get_lorebooks()
-            if 0 <= self.selected_index < len(lorebooks):
-                lorebook = lorebooks[self.selected_index]
+            lorebook = self.config_manager.get_lorebook_by_name(self.selected_name)
+            if lorebook:
                 name = lorebook.get('name', 'Unknown')
                 entry_count = len(lorebook.get('entries', []))
                 
                 # Create confirmation view
-                confirm_view = ConfirmDeleteView(self.config_manager, self.selected_index, name, entry_count)
+                confirm_view = ConfirmDeleteView(self.config_manager, name, entry_count, parent_view=self)
                 
                 embed = discord.Embed(
                     title="⚠️ Confirm Deletion",
@@ -1469,27 +1514,42 @@ class LorebookManagementView(discord.ui.View):
 class ConfirmDeleteView(discord.ui.View):
     """Confirmation view for deleting a lorebook"""
     
-    def __init__(self, config_manager: ConfigManager, index: int, name: str, entry_count: int, timeout=30):
+    def __init__(self, config_manager: ConfigManager, name: str, entry_count: int, parent_view=None, timeout=30):
         super().__init__(timeout=timeout)
         self.config_manager = config_manager
-        self.index = index
         self.name = name
         self.entry_count = entry_count
+        self.parent_view = parent_view
     
     @discord.ui.button(label="✅ Yes, Delete", style=discord.ButtonStyle.danger)
     async def confirm_delete(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Confirm deletion"""
         try:
-            self.config_manager.delete_lorebook(self.index)
-            
-            embed = discord.Embed(
-                title="✅ Lorebook Deleted",
-                description=f"Lorebook '{self.name}' with {self.entry_count} entries has been deleted.",
-                color=discord.Color.green()
-            )
-            
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-            self.stop()
+            # Get index by name to delete
+            index = self.config_manager.get_lorebook_index_by_name(self.name)
+            if index is not None:
+                self.config_manager.delete_lorebook(index)
+                
+                embed = discord.Embed(
+                    title="✅ Lorebook Deleted",
+                    description=f"Lorebook '{self.name}' with {self.entry_count} entries has been deleted.",
+                    color=discord.Color.green()
+                )
+                
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                
+                # Refresh parent view if provided
+                if self.parent_view:
+                    # Clear selection since the lorebook was deleted
+                    self.parent_view.selected_name = None
+                    await self.parent_view.refresh_view(interaction)
+                
+                self.stop()
+            else:
+                await interaction.response.send_message(
+                    f"❌ Error: Lorebook '{self.name}' not found.",
+                    ephemeral=True
+                )
         except Exception as e:
             await interaction.response.send_message(
                 f"❌ Error deleting lorebook: {str(e)}",
