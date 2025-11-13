@@ -947,33 +947,34 @@ class ConfigMenuView(discord.ui.View):
     
     @discord.ui.button(label="📚 Lorebooks", style=discord.ButtonStyle.secondary, row=1)
     async def lorebooks_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """View lorebooks"""
+        """Manage lorebooks interactively"""
         try:
             lorebooks = self.config_manager.get_lorebooks()
             
-            if not lorebooks:
-                await interaction.response.send_message("No lorebooks configured.", ephemeral=True)
-                return
-            
             embed = discord.Embed(
-                title="Lorebooks",
-                description="Available lorebooks:",
+                title="📚 Lorebook Management",
+                description="Manage your lorebooks interactively below.",
                 color=discord.Color.purple()
             )
             
-            for lb in lorebooks:
-                status = "✅ Active" if lb.get("active", False) else "❌ Inactive"
-                entries_count = len(lb.get("entries", []))
+            if lorebooks:
                 embed.add_field(
-                    name=f"{lb.get('name', 'Unknown')} ({status})",
-                    value=f"Entries: {entries_count}",
-                    inline=True
+                    name="Available Lorebooks",
+                    value=f"{len(lorebooks)} lorebook(s) configured",
+                    inline=False
+                )
+            else:
+                embed.add_field(
+                    name="No Lorebooks",
+                    value="Click 'Create Lorebook' to get started!",
+                    inline=False
                 )
             
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            view = LorebookManagementView(self.config_manager)
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
         except Exception as e:
             await interaction.response.send_message(
-                f"Error viewing lorebooks: {str(e)}", 
+                f"Error opening lorebook management: {str(e)}", 
                 ephemeral=True
             )
     
@@ -1104,6 +1105,412 @@ class OpenAIConfigModal(discord.ui.Modal, title="Configure OpenAI Settings"):
                 f"Error updating configuration: {str(e)}", 
                 ephemeral=True
             )
+
+
+class CreateLorebookModal(discord.ui.Modal, title="Create New Lorebook"):
+    """Modal for creating a new lorebook"""
+    
+    def __init__(self, config_manager: ConfigManager):
+        super().__init__()
+        self.config_manager = config_manager
+        
+        self.name = discord.ui.TextInput(
+            label="Lorebook Name",
+            placeholder="Enter a unique name for the lorebook",
+            required=True,
+            max_length=50
+        )
+        self.add_item(self.name)
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        """Handle form submission"""
+        try:
+            name = self.name.value.strip()
+            
+            # Check if lorebook already exists
+            if self.config_manager.get_lorebook_by_name(name):
+                await interaction.response.send_message(
+                    f"❌ Error: Lorebook '{name}' already exists.",
+                    ephemeral=True
+                )
+                return
+            
+            # Create the lorebook
+            self.config_manager.add_lorebook(name, active=True)
+            
+            embed = discord.Embed(
+                title="✅ Lorebook Created",
+                description=f"Lorebook '{name}' has been created and activated.",
+                color=discord.Color.green()
+            )
+            
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error creating lorebook: {str(e)}",
+                ephemeral=True
+            )
+
+
+class AddLorebookEntryModal(discord.ui.Modal, title="Add Lorebook Entry"):
+    """Modal for adding a new lorebook entry"""
+    
+    def __init__(self, config_manager: ConfigManager, lorebook_name: str):
+        super().__init__()
+        self.config_manager = config_manager
+        self.lorebook_name = lorebook_name
+        
+        self.content = discord.ui.TextInput(
+            label="Entry Content",
+            placeholder="Enter the content for this entry",
+            required=True,
+            max_length=2000,
+            style=discord.TextStyle.paragraph
+        )
+        self.add_item(self.content)
+        
+        self.entry_type = discord.ui.TextInput(
+            label="Entry Type",
+            placeholder="constant or normal",
+            required=True,
+            max_length=10,
+            default="normal"
+        )
+        self.add_item(self.entry_type)
+        
+        self.keywords = discord.ui.TextInput(
+            label="Keywords (for normal entries)",
+            placeholder="keyword1, keyword2, keyword3",
+            required=False,
+            max_length=200
+        )
+        self.add_item(self.keywords)
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        """Handle form submission"""
+        try:
+            content = self.content.value.strip()
+            entry_type = self.entry_type.value.strip().lower()
+            
+            # Validate entry type
+            if entry_type not in ["constant", "normal"]:
+                await interaction.response.send_message(
+                    "❌ Error: Entry type must be 'constant' or 'normal'.",
+                    ephemeral=True
+                )
+                return
+            
+            # Parse keywords
+            keywords = []
+            if entry_type == "normal" and self.keywords.value:
+                keywords = [k.strip() for k in self.keywords.value.split(",") if k.strip()]
+            
+            # Add entry
+            if self.config_manager.add_lorebook_entry(self.lorebook_name, content, entry_type, keywords):
+                embed = discord.Embed(
+                    title="✅ Entry Added",
+                    description=f"Entry added to lorebook '{self.lorebook_name}'",
+                    color=discord.Color.green()
+                )
+                embed.add_field(name="Type", value=entry_type.upper(), inline=True)
+                if keywords:
+                    embed.add_field(name="Keywords", value=", ".join(keywords), inline=True)
+                embed.add_field(name="Content", value=content[:100] + "..." if len(content) > 100 else content, inline=False)
+                
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+            else:
+                await interaction.response.send_message(
+                    f"❌ Error: Could not add entry to lorebook '{self.lorebook_name}'.",
+                    ephemeral=True
+                )
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error adding entry: {str(e)}",
+                ephemeral=True
+            )
+
+
+class LorebookManagementView(discord.ui.View):
+    """Interactive view for managing lorebooks"""
+    
+    def __init__(self, config_manager: ConfigManager, timeout=180):
+        super().__init__(timeout=timeout)
+        self.config_manager = config_manager
+        self.update_components()
+    
+    def update_components(self):
+        """Update the select menu with current lorebooks"""
+        self.clear_items()
+        
+        lorebooks = self.config_manager.get_lorebooks()
+        
+        if lorebooks:
+            # Add lorebook select menu
+            options = []
+            for i, lb in enumerate(lorebooks):
+                status = "✅" if lb.get("active", False) else "❌"
+                entry_count = len(lb.get("entries", []))
+                options.append(
+                    discord.SelectOption(
+                        label=f"{status} {lb.get('name', 'Unknown')}",
+                        value=str(i),
+                        description=f"{entry_count} entries"
+                    )
+                )
+            
+            select = discord.ui.Select(
+                placeholder="Select a lorebook to manage",
+                options=options,
+                row=0
+            )
+            select.callback = self.lorebook_selected
+            self.add_item(select)
+        
+        # Add management buttons
+        create_btn = discord.ui.Button(label="➕ Create Lorebook", style=discord.ButtonStyle.success, row=1)
+        create_btn.callback = self.create_lorebook
+        self.add_item(create_btn)
+        
+        if lorebooks:
+            toggle_btn = discord.ui.Button(label="🔄 Toggle Active/Inactive", style=discord.ButtonStyle.primary, row=1)
+            toggle_btn.callback = self.toggle_lorebook
+            self.add_item(toggle_btn)
+            
+            add_entry_btn = discord.ui.Button(label="📝 Add Entry", style=discord.ButtonStyle.primary, row=1)
+            add_entry_btn.callback = self.add_entry
+            self.add_item(add_entry_btn)
+            
+            view_entries_btn = discord.ui.Button(label="👁️ View Entries", style=discord.ButtonStyle.secondary, row=2)
+            view_entries_btn.callback = self.view_entries
+            self.add_item(view_entries_btn)
+            
+            delete_btn = discord.ui.Button(label="🗑️ Delete Lorebook", style=discord.ButtonStyle.danger, row=2)
+            delete_btn.callback = self.delete_lorebook
+            self.add_item(delete_btn)
+        
+        close_btn = discord.ui.Button(label="❌ Close", style=discord.ButtonStyle.secondary, row=3)
+        close_btn.callback = self.close
+        self.add_item(close_btn)
+    
+    async def lorebook_selected(self, interaction: discord.Interaction):
+        """Handle lorebook selection"""
+        # Store the selected index for other button actions
+        self.selected_index = int(interaction.data['values'][0])
+        await interaction.response.defer()
+    
+    async def create_lorebook(self, interaction: discord.Interaction):
+        """Open modal to create a new lorebook"""
+        await interaction.response.send_modal(CreateLorebookModal(self.config_manager))
+    
+    async def toggle_lorebook(self, interaction: discord.Interaction):
+        """Toggle the active state of selected lorebook"""
+        if not hasattr(self, 'selected_index'):
+            await interaction.response.send_message(
+                "⚠️ Please select a lorebook first using the dropdown menu.",
+                ephemeral=True
+            )
+            return
+        
+        try:
+            lorebooks = self.config_manager.get_lorebooks()
+            if 0 <= self.selected_index < len(lorebooks):
+                lorebook = lorebooks[self.selected_index]
+                name = lorebook.get('name', 'Unknown')
+                current_status = lorebook.get('active', False)
+                new_status = not current_status
+                
+                self.config_manager.toggle_lorebook_active(name, new_status)
+                
+                status_text = "activated" if new_status else "deactivated"
+                embed = discord.Embed(
+                    title="✅ Lorebook Updated",
+                    description=f"Lorebook '{name}' has been {status_text}.",
+                    color=discord.Color.green() if new_status else discord.Color.orange()
+                )
+                
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+            else:
+                await interaction.response.send_message(
+                    "❌ Invalid lorebook selection.",
+                    ephemeral=True
+                )
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error toggling lorebook: {str(e)}",
+                ephemeral=True
+            )
+    
+    async def add_entry(self, interaction: discord.Interaction):
+        """Open modal to add an entry to selected lorebook"""
+        if not hasattr(self, 'selected_index'):
+            await interaction.response.send_message(
+                "⚠️ Please select a lorebook first using the dropdown menu.",
+                ephemeral=True
+            )
+            return
+        
+        try:
+            lorebooks = self.config_manager.get_lorebooks()
+            if 0 <= self.selected_index < len(lorebooks):
+                lorebook = lorebooks[self.selected_index]
+                name = lorebook.get('name', 'Unknown')
+                await interaction.response.send_modal(AddLorebookEntryModal(self.config_manager, name))
+            else:
+                await interaction.response.send_message(
+                    "❌ Invalid lorebook selection.",
+                    ephemeral=True
+                )
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error opening add entry form: {str(e)}",
+                ephemeral=True
+            )
+    
+    async def view_entries(self, interaction: discord.Interaction):
+        """View entries in the selected lorebook"""
+        if not hasattr(self, 'selected_index'):
+            await interaction.response.send_message(
+                "⚠️ Please select a lorebook first using the dropdown menu.",
+                ephemeral=True
+            )
+            return
+        
+        try:
+            lorebooks = self.config_manager.get_lorebooks()
+            if 0 <= self.selected_index < len(lorebooks):
+                lorebook = lorebooks[self.selected_index]
+                name = lorebook.get('name', 'Unknown')
+                entries = lorebook.get('entries', [])
+                active = lorebook.get('active', False)
+                
+                status = "Active ✅" if active else "Inactive ❌"
+                
+                if not entries:
+                    embed = discord.Embed(
+                        title=f"📚 {name} ({status})",
+                        description="This lorebook has no entries yet.",
+                        color=discord.Color.blue()
+                    )
+                    await interaction.response.send_message(embed=embed, ephemeral=True)
+                    return
+                
+                embed = discord.Embed(
+                    title=f"📚 {name} ({status})",
+                    description=f"Total entries: {len(entries)}",
+                    color=discord.Color.blue()
+                )
+                
+                # Show first 10 entries to avoid hitting embed limits
+                for i, entry in enumerate(entries[:10]):
+                    entry_type = entry.get('insertion_type', 'normal').upper()
+                    content = entry.get('content', '')
+                    keywords = entry.get('keywords', [])
+                    
+                    # Truncate long content
+                    if len(content) > 100:
+                        content = content[:100] + "..."
+                    
+                    field_name = f"Entry {i} [{entry_type}]"
+                    field_value = f"**Content:** {content}"
+                    if entry_type == "NORMAL" and keywords:
+                        field_value += f"\n**Keywords:** {', '.join(keywords[:5])}"
+                    
+                    embed.add_field(name=field_name, value=field_value, inline=False)
+                
+                if len(entries) > 10:
+                    embed.set_footer(text=f"Showing 10 of {len(entries)} entries. Use !lorebook show {name} to see all.")
+                
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+            else:
+                await interaction.response.send_message(
+                    "❌ Invalid lorebook selection.",
+                    ephemeral=True
+                )
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error viewing entries: {str(e)}",
+                ephemeral=True
+            )
+    
+    async def delete_lorebook(self, interaction: discord.Interaction):
+        """Delete the selected lorebook (with confirmation)"""
+        if not hasattr(self, 'selected_index'):
+            await interaction.response.send_message(
+                "⚠️ Please select a lorebook first using the dropdown menu.",
+                ephemeral=True
+            )
+            return
+        
+        try:
+            lorebooks = self.config_manager.get_lorebooks()
+            if 0 <= self.selected_index < len(lorebooks):
+                lorebook = lorebooks[self.selected_index]
+                name = lorebook.get('name', 'Unknown')
+                entry_count = len(lorebook.get('entries', []))
+                
+                # Create confirmation view
+                confirm_view = ConfirmDeleteView(self.config_manager, self.selected_index, name, entry_count)
+                
+                embed = discord.Embed(
+                    title="⚠️ Confirm Deletion",
+                    description=f"Are you sure you want to delete lorebook '{name}' with {entry_count} entries?",
+                    color=discord.Color.red()
+                )
+                embed.set_footer(text="This action cannot be undone!")
+                
+                await interaction.response.send_message(embed=embed, view=confirm_view, ephemeral=True)
+            else:
+                await interaction.response.send_message(
+                    "❌ Invalid lorebook selection.",
+                    ephemeral=True
+                )
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error deleting lorebook: {str(e)}",
+                ephemeral=True
+            )
+    
+    async def close(self, interaction: discord.Interaction):
+        """Close the management view"""
+        await interaction.response.send_message("Lorebook management closed.", ephemeral=True)
+        self.stop()
+
+
+class ConfirmDeleteView(discord.ui.View):
+    """Confirmation view for deleting a lorebook"""
+    
+    def __init__(self, config_manager: ConfigManager, index: int, name: str, entry_count: int, timeout=30):
+        super().__init__(timeout=timeout)
+        self.config_manager = config_manager
+        self.index = index
+        self.name = name
+        self.entry_count = entry_count
+    
+    @discord.ui.button(label="✅ Yes, Delete", style=discord.ButtonStyle.danger)
+    async def confirm_delete(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Confirm deletion"""
+        try:
+            self.config_manager.delete_lorebook(self.index)
+            
+            embed = discord.Embed(
+                title="✅ Lorebook Deleted",
+                description=f"Lorebook '{self.name}' with {self.entry_count} entries has been deleted.",
+                color=discord.Color.green()
+            )
+            
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            self.stop()
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error deleting lorebook: {str(e)}",
+                ephemeral=True
+            )
+    
+    @discord.ui.button(label="❌ Cancel", style=discord.ButtonStyle.secondary)
+    async def cancel_delete(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Cancel deletion"""
+        await interaction.response.send_message("Deletion cancelled.", ephemeral=True)
+        self.stop()
 
 
 class PresetBot(commands.Bot):
