@@ -1637,7 +1637,7 @@ class LorebookManagementView(discord.ui.View):
             paginated_lorebooks = lorebooks[start:end]
             total_pages = (len(lorebooks) + self.items_per_page - 1) // self.items_per_page
             
-            # Add lorebook select menu
+            # Add lorebook select menu (Row 0)
             options = []
             for lb in paginated_lorebooks:
                 status = "✅" if lb.get("active", False) else "❌"
@@ -1659,7 +1659,7 @@ class LorebookManagementView(discord.ui.View):
             select.callback = self.lorebook_selected
             self.add_item(select)
         
-        # Add management buttons
+        # Row 1: Primary Actions (max 4 buttons)
         create_btn = discord.ui.Button(label="➕ Create Lorebook", style=discord.ButtonStyle.success, row=1)
         create_btn.callback = self.create_lorebook
         self.add_item(create_btn)
@@ -1673,7 +1673,7 @@ class LorebookManagementView(discord.ui.View):
             add_entry_btn.callback = self.add_entry
             self.add_item(add_entry_btn)
             
-            edit_entry_btn = discord.ui.Button(label="✏️ Edit Entry", style=discord.ButtonStyle.primary, row=2)
+            edit_entry_btn = discord.ui.Button(label="✏️ Edit Entry", style=discord.ButtonStyle.primary, row=1)
             edit_entry_btn.callback = self.edit_entry
             # Disable button if no lorebook selected or no entries
             if not self.selected_name:
@@ -1683,7 +1683,9 @@ class LorebookManagementView(discord.ui.View):
                 if not lorebook or not lorebook.get('entries'):
                     edit_entry_btn.disabled = True
             self.add_item(edit_entry_btn)
-            
+        
+        # Row 2: Secondary Actions (max 3 buttons)
+        if lorebooks:
             view_entries_btn = discord.ui.Button(label="👁️ View Entries", style=discord.ButtonStyle.secondary, row=2)
             view_entries_btn.callback = self.view_entries
             self.add_item(view_entries_btn)
@@ -1696,42 +1698,39 @@ class LorebookManagementView(discord.ui.View):
             delete_btn.callback = self.delete_lorebook
             self.add_item(delete_btn)
         
-        # Add Task 8: Toggle All button (row 3)
+        # Row 3: Utility Actions (max 3 buttons)
         if lorebooks:
             toggle_all_btn = discord.ui.Button(label="🔄 Toggle All", style=discord.ButtonStyle.primary, row=3)
             toggle_all_btn.callback = self.toggle_all_lorebooks
             self.add_item(toggle_all_btn)
-        
-        # Add Task 9: Export button (row 3)
-        if lorebooks:
+            
             export_btn = discord.ui.Button(label="📤 Export", style=discord.ButtonStyle.secondary, row=3)
             export_btn.callback = self.export_lorebook
             self.add_item(export_btn)
         
-        # Add search button (row 3)
         search_btn = discord.ui.Button(label="🔍 Search", style=discord.ButtonStyle.secondary, row=3)
         search_btn.callback = self.search_lorebooks
         self.add_item(search_btn)
         
-        # Add help button
-        help_btn = discord.ui.Button(label="ℹ️ Help", style=discord.ButtonStyle.secondary, row=3)
-        help_btn.callback = self.show_help
-        self.add_item(help_btn)
-        
+        # Row 4: Navigation & Help (max 4 buttons in worst case)
         # Add pagination buttons if needed
         total_pages = (len(lorebooks) + self.items_per_page - 1) // self.items_per_page if lorebooks else 1
         if total_pages > 1:
             if self.page > 0:
-                prev_btn = discord.ui.Button(label="◀️ Previous", style=discord.ButtonStyle.secondary, row=3)
+                prev_btn = discord.ui.Button(label="◀️ Previous", style=discord.ButtonStyle.secondary, row=4)
                 prev_btn.callback = self.previous_page
                 self.add_item(prev_btn)
             
             if self.page < total_pages - 1:
-                next_btn = discord.ui.Button(label="Next ▶️", style=discord.ButtonStyle.secondary, row=3)
+                next_btn = discord.ui.Button(label="Next ▶️", style=discord.ButtonStyle.secondary, row=4)
                 next_btn.callback = self.next_page
                 self.add_item(next_btn)
         
-        close_btn = discord.ui.Button(label="❌ Close", style=discord.ButtonStyle.secondary, row=3)
+        help_btn = discord.ui.Button(label="ℹ️ Help", style=discord.ButtonStyle.secondary, row=4)
+        help_btn.callback = self.show_help
+        self.add_item(help_btn)
+        
+        close_btn = discord.ui.Button(label="❌ Close", style=discord.ButtonStyle.secondary, row=4)
         close_btn.callback = self.close
         self.add_item(close_btn)
     
@@ -2486,7 +2485,7 @@ class CharacterManagementView(discord.ui.View):
             paginated_characters = characters[start:end]
             total_pages = (len(characters) + self.items_per_page - 1) // self.items_per_page
             
-            # Add character select menu
+            # Add character select menu (Row 0)
             options = []
             for char in paginated_characters:
                 display_name = char.get('display_name', char.get('name', 'Unknown'))
@@ -2508,7 +2507,7 @@ class CharacterManagementView(discord.ui.View):
             select.callback = self.character_selected
             self.add_item(select)
         
-        # Add management buttons
+        # Row 1: Primary Actions (max 4 buttons)
         create_btn = discord.ui.Button(label="➕ Create Character", style=discord.ButtonStyle.success, row=1)
         create_btn.callback = self.create_character
         self.add_item(create_btn)
@@ -2526,36 +2525,35 @@ class CharacterManagementView(discord.ui.View):
             delete_btn.callback = self.delete_character
             self.add_item(delete_btn)
         
-        # Add export button
+        # Row 2: Utility Actions (max 2 buttons)
         if characters:
             export_btn = discord.ui.Button(label="📤 Export", style=discord.ButtonStyle.secondary, row=2)
             export_btn.callback = self.export_character
             self.add_item(export_btn)
         
-        # Add search button
         search_btn = discord.ui.Button(label="🔍 Search", style=discord.ButtonStyle.secondary, row=2)
         search_btn.callback = self.search_characters
         self.add_item(search_btn)
         
-        # Add help button
-        help_btn = discord.ui.Button(label="ℹ️ Help", style=discord.ButtonStyle.secondary, row=2)
-        help_btn.callback = self.show_help
-        self.add_item(help_btn)
-        
+        # Row 3: Navigation & Help (max 4 buttons in worst case)
         # Add pagination buttons if needed
         total_pages = (len(characters) + self.items_per_page - 1) // self.items_per_page if characters else 1
         if total_pages > 1:
             if self.page > 0:
-                prev_btn = discord.ui.Button(label="◀️ Previous", style=discord.ButtonStyle.secondary, row=2)
+                prev_btn = discord.ui.Button(label="◀️ Previous", style=discord.ButtonStyle.secondary, row=3)
                 prev_btn.callback = self.previous_page
                 self.add_item(prev_btn)
             
             if self.page < total_pages - 1:
-                next_btn = discord.ui.Button(label="Next ▶️", style=discord.ButtonStyle.secondary, row=2)
+                next_btn = discord.ui.Button(label="Next ▶️", style=discord.ButtonStyle.secondary, row=3)
                 next_btn.callback = self.next_page
                 self.add_item(next_btn)
         
-        close_btn = discord.ui.Button(label="❌ Close", style=discord.ButtonStyle.secondary, row=2)
+        help_btn = discord.ui.Button(label="ℹ️ Help", style=discord.ButtonStyle.secondary, row=3)
+        help_btn.callback = self.show_help
+        self.add_item(help_btn)
+        
+        close_btn = discord.ui.Button(label="❌ Close", style=discord.ButtonStyle.secondary, row=3)
         close_btn.callback = self.close
         self.add_item(close_btn)
     
