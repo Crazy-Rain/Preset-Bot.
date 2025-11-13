@@ -825,15 +825,16 @@ class AIResponseHandler:
 class ConfigMenuView(discord.ui.View):
     """Interactive configuration menu using buttons"""
     
-    def __init__(self, config_manager: ConfigManager, timeout=180):
+    def __init__(self, config_manager: ConfigManager, ai_handler: Optional['AIResponseHandler'] = None, timeout=180):
         super().__init__(timeout=timeout)
         self.config_manager = config_manager
+        self.ai_handler = ai_handler
     
     @discord.ui.button(label="🔧 OpenAI Config", style=discord.ButtonStyle.primary, row=0)
     async def openai_config_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Configure OpenAI settings"""
         try:
-            await interaction.response.send_modal(OpenAIConfigModal(self.config_manager))
+            await interaction.response.send_modal(OpenAIConfigModal(self.config_manager, self.ai_handler))
         except Exception as e:
             await interaction.response.send_message(
                 f"Error opening configuration modal: {str(e)}", 
@@ -1028,9 +1029,10 @@ class ConfigMenuView(discord.ui.View):
 class OpenAIConfigModal(discord.ui.Modal, title="Configure OpenAI Settings"):
     """Modal for configuring OpenAI settings"""
     
-    def __init__(self, config_manager: ConfigManager):
+    def __init__(self, config_manager: ConfigManager, ai_handler: Optional['AIResponseHandler'] = None):
         super().__init__()
         self.config_manager = config_manager
+        self.ai_handler = ai_handler
         
         # Get current config
         openai_config = config_manager.get_openai_config()
@@ -1077,9 +1079,18 @@ class OpenAIConfigModal(discord.ui.Modal, title="Configure OpenAI Settings"):
             self.config_manager.config["openai"] = openai_config
             self.config_manager.save_config()
             
+            # Refresh the AI client with new credentials
+            if self.ai_handler:
+                try:
+                    self.ai_handler.update_client()
+                except Exception as e:
+                    print(f"Error updating AI client: {str(e)}")
+                    import traceback
+                    print(traceback.format_exc())
+            
             embed = discord.Embed(
                 title="✅ OpenAI Configuration Updated",
-                description="Settings have been saved successfully.",
+                description="Settings have been saved successfully and client refreshed.",
                 color=discord.Color.green()
             )
             embed.add_field(name="Base URL", value=self.base_url.value, inline=False)
@@ -1715,7 +1726,7 @@ class PresetBot(commands.Bot):
                 )
                 embed.set_footer(text="Configuration menu expires after 3 minutes of inactivity")
                 
-                view = ConfigMenuView(self.config_manager, timeout=180)
+                view = ConfigMenuView(self.config_manager, self.ai_handler, timeout=180)
                 await ctx.send(embed=embed, view=view)
                 
             except Exception as e:

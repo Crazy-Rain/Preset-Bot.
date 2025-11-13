@@ -18,7 +18,7 @@ The Interactive Discord Configuration system allows you to configure your bot di
 
 Simply use the `!config` command in any channel where the bot has permissions:
 
-```
+```text
 !config
 ```
 

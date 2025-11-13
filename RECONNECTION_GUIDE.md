@@ -87,7 +87,7 @@ With default settings (`base_delay=5`, `max_delay=300`):
 ## Error Handling
 
 ### Login Failure
-```
+```text
 [ERROR] Login failed: Improper token has been passed.
 Please check your Discord bot token in config.json
 The token may be invalid or expired.
@@ -95,14 +95,14 @@ The token may be invalid or expired.
 **Action**: Bot exits immediately (no retry). You must fix the token in config.json.
 
 ### HTTP Exception
-```
+```text
 [ERROR] HTTP Exception: 503 Service Unavailable
 Will retry in 5 seconds... (Attempt 1/10)
 ```
 **Action**: Bot retries with exponential backoff. Discord API may be temporarily unavailable.
 
 ### Gateway Not Found
-```
+```text
 [ERROR] Gateway not found: The gateway to connect to Discord was not found.
 Discord's gateway service may be down.
 Will retry in 5 seconds... (Attempt 1/10)
@@ -110,7 +110,7 @@ Will retry in 5 seconds... (Attempt 1/10)
 **Action**: Bot retries with exponential backoff. Discord's gateway service may be temporarily down.
 
 ### Unexpected Error
-```
+```text
 [ERROR] Unexpected error: [Error details]
 [Full stack trace]
 Will retry in 5 seconds... (Attempt 1/10)
@@ -118,7 +118,7 @@ Will retry in 5 seconds... (Attempt 1/10)
 **Action**: Bot retries with exponential backoff. Unknown errors are treated as potentially recoverable.
 
 ### Max Retries Reached
-```
+```text
 Max retries (10) reached. Giving up.
 ```
 **Action**: Bot exits. Manual intervention required.
@@ -126,13 +126,13 @@ Max retries (10) reached. Giving up.
 ## Console Output
 
 ### Successful Connection
-```
+```text
 Starting Discord bot... (Attempt 1)
 [Bot connects successfully]
 ```
 
 ### Reconnection Attempt
-```
+```text
 Starting Discord bot... (Attempt 2)
   Reconnection enabled: True
   Max retries: 10
@@ -142,12 +142,12 @@ Will retry in 5 seconds... (Attempt 2/10)
 ```
 
 ### Graceful Shutdown
-```
+```text
 Bot shut down gracefully.
 ```
 
 ### Keyboard Interrupt
-```
+```text
 [INFO] Received keyboard interrupt. Shutting down...
 ```
 
