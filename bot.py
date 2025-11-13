@@ -1244,6 +1244,8 @@ class LorebookManagementView(discord.ui.View):
         self.config_manager = config_manager
         self.selected_name = None
         self.message = None
+        self.page = 0
+        self.items_per_page = 20
         self.update_components()
     
     def update_components(self):
@@ -1253,9 +1255,15 @@ class LorebookManagementView(discord.ui.View):
         lorebooks = self.config_manager.get_lorebooks()
         
         if lorebooks:
+            # Calculate pagination
+            start = self.page * self.items_per_page
+            end = start + self.items_per_page
+            paginated_lorebooks = lorebooks[start:end]
+            total_pages = (len(lorebooks) + self.items_per_page - 1) // self.items_per_page
+            
             # Add lorebook select menu
             options = []
-            for lb in lorebooks:
+            for lb in paginated_lorebooks:
                 status = "✅" if lb.get("active", False) else "❌"
                 entry_count = len(lb.get("entries", []))
                 name = lb.get('name', 'Unknown')
@@ -1268,7 +1276,7 @@ class LorebookManagementView(discord.ui.View):
                 )
             
             select = discord.ui.Select(
-                placeholder="Select a lorebook to manage",
+                placeholder=f"Select a lorebook (Page {self.page + 1}/{total_pages})",
                 options=options,
                 row=0
             )
@@ -1297,9 +1305,38 @@ class LorebookManagementView(discord.ui.View):
             delete_btn.callback = self.delete_lorebook
             self.add_item(delete_btn)
         
+        # Add pagination buttons if needed
+        total_pages = (len(lorebooks) + self.items_per_page - 1) // self.items_per_page if lorebooks else 1
+        if total_pages > 1:
+            if self.page > 0:
+                prev_btn = discord.ui.Button(label="◀️ Previous", style=discord.ButtonStyle.secondary, row=3)
+                prev_btn.callback = self.previous_page
+                self.add_item(prev_btn)
+            
+            if self.page < total_pages - 1:
+                next_btn = discord.ui.Button(label="Next ▶️", style=discord.ButtonStyle.secondary, row=3)
+                next_btn.callback = self.next_page
+                self.add_item(next_btn)
+        
         close_btn = discord.ui.Button(label="❌ Close", style=discord.ButtonStyle.secondary, row=3)
         close_btn.callback = self.close
         self.add_item(close_btn)
+    
+    async def previous_page(self, interaction: discord.Interaction):
+        """Navigate to previous page"""
+        if self.page > 0:
+            self.page -= 1
+            await self.refresh_view(interaction)
+            await interaction.response.defer()
+    
+    async def next_page(self, interaction: discord.Interaction):
+        """Navigate to next page"""
+        lorebooks = self.config_manager.get_lorebooks()
+        total_pages = (len(lorebooks) + self.items_per_page - 1) // self.items_per_page
+        if self.page < total_pages - 1:
+            self.page += 1
+            await self.refresh_view(interaction)
+            await interaction.response.defer()
     
     async def lorebook_selected(self, interaction: discord.Interaction):
         """Handle lorebook selection"""
@@ -1322,17 +1359,41 @@ class LorebookManagementView(discord.ui.View):
             )
             
             if lorebooks:
-                embed.add_field(
-                    name="Available Lorebooks",
-                    value=f"{len(lorebooks)} lorebook(s) configured",
-                    inline=False
-                )
+                # Calculate statistics
+                active_count = sum(1 for lb in lorebooks if lb.get("active", False))
+                inactive_count = len(lorebooks) - active_count
+                total_entries = sum(len(lb.get("entries", [])) for lb in lorebooks)
+                
+                # Display statistics in code block
+                stats = f"```\n"
+                stats += f"📊 Statistics\n"
+                stats += f"Total Lorebooks:  {len(lorebooks)}\n"
+                stats += f"🟢 Active:        {active_count}\n"
+                stats += f"🔴 Inactive:      {inactive_count}\n"
+                stats += f"📝 Total Entries: {total_entries}\n"
+                stats += f"```"
+                embed.add_field(name="Overview", value=stats, inline=False)
+                
+                # Show currently selected item if any
+                if self.selected_name:
+                    selected_lb = self.config_manager.get_lorebook_by_name(self.selected_name)
+                    if selected_lb:
+                        status_icon = "🟢" if selected_lb.get("active", False) else "🔴"
+                        entry_count = len(selected_lb.get("entries", []))
+                        selected_info = f"{status_icon} **{self.selected_name}**\n"
+                        selected_info += f"Status: {'Active' if selected_lb.get('active', False) else 'Inactive'}\n"
+                        selected_info += f"Entries: {entry_count}"
+                        embed.add_field(name="Currently Selected", value=selected_info, inline=False)
+                
+                # Add helpful footer
+                embed.set_footer(text="💡 Tip: Select a lorebook from the dropdown to manage it")
             else:
                 embed.add_field(
                     name="No Lorebooks",
                     value="Click 'Create Lorebook' to get started!",
                     inline=False
                 )
+                embed.set_footer(text="💡 Tip: Create your first lorebook to begin")
             
             if self.message:
                 await self.message.edit(embed=embed, view=self)
@@ -1741,6 +1802,8 @@ class CharacterManagementView(discord.ui.View):
         self.config_manager = config_manager
         self.selected_name = None
         self.message = None
+        self.page = 0
+        self.items_per_page = 20
         self.update_components()
     
     def update_components(self):
@@ -1750,9 +1813,15 @@ class CharacterManagementView(discord.ui.View):
         characters = self.config_manager.get_characters()
         
         if characters:
+            # Calculate pagination
+            start = self.page * self.items_per_page
+            end = start + self.items_per_page
+            paginated_characters = characters[start:end]
+            total_pages = (len(characters) + self.items_per_page - 1) // self.items_per_page
+            
             # Add character select menu
             options = []
-            for char in characters:
+            for char in paginated_characters:
                 display_name = char.get('display_name', char.get('name', 'Unknown'))
                 name = char.get('name', 'N/A')
                 description = char.get('description', '')[:50]
@@ -1765,7 +1834,7 @@ class CharacterManagementView(discord.ui.View):
                 )
             
             select = discord.ui.Select(
-                placeholder="Select a character to view details",
+                placeholder=f"Select a character (Page {self.page + 1}/{total_pages})",
                 options=options,
                 row=0
             )
@@ -1786,9 +1855,38 @@ class CharacterManagementView(discord.ui.View):
             delete_btn.callback = self.delete_character
             self.add_item(delete_btn)
         
+        # Add pagination buttons if needed
+        total_pages = (len(characters) + self.items_per_page - 1) // self.items_per_page if characters else 1
+        if total_pages > 1:
+            if self.page > 0:
+                prev_btn = discord.ui.Button(label="◀️ Previous", style=discord.ButtonStyle.secondary, row=2)
+                prev_btn.callback = self.previous_page
+                self.add_item(prev_btn)
+            
+            if self.page < total_pages - 1:
+                next_btn = discord.ui.Button(label="Next ▶️", style=discord.ButtonStyle.secondary, row=2)
+                next_btn.callback = self.next_page
+                self.add_item(next_btn)
+        
         close_btn = discord.ui.Button(label="❌ Close", style=discord.ButtonStyle.secondary, row=2)
         close_btn.callback = self.close
         self.add_item(close_btn)
+    
+    async def previous_page(self, interaction: discord.Interaction):
+        """Navigate to previous page"""
+        if self.page > 0:
+            self.page -= 1
+            await self.refresh_view(interaction)
+            await interaction.response.defer()
+    
+    async def next_page(self, interaction: discord.Interaction):
+        """Navigate to next page"""
+        characters = self.config_manager.get_characters()
+        total_pages = (len(characters) + self.items_per_page - 1) // self.items_per_page
+        if self.page < total_pages - 1:
+            self.page += 1
+            await self.refresh_view(interaction)
+            await interaction.response.defer()
     
     async def character_selected(self, interaction: discord.Interaction):
         """Handle character selection"""
@@ -1806,21 +1904,37 @@ class CharacterManagementView(discord.ui.View):
             embed = discord.Embed(
                 title="🤖 AI Character Management",
                 description="Manage your AI characters interactively below.",
-                color=discord.Color.blue()
+                color=discord.Color.purple()
             )
             
             if characters:
-                embed.add_field(
-                    name="Available Characters",
-                    value=f"{len(characters)} character(s) configured",
-                    inline=False
-                )
+                # Display statistics in code block
+                stats = f"```\n"
+                stats += f"📊 Statistics\n"
+                stats += f"Total Characters: {len(characters)}\n"
+                stats += f"```"
+                embed.add_field(name="Overview", value=stats, inline=False)
+                
+                # Show currently selected item if any
+                if self.selected_name:
+                    selected_char = self.config_manager.get_character_by_name(self.selected_name)
+                    if selected_char:
+                        display_name = selected_char.get('display_name', 'Unknown')
+                        description = selected_char.get('description', 'No description')[:100]
+                        selected_info = f"**{display_name}**\n{description}"
+                        if len(selected_char.get('description', '')) > 100:
+                            selected_info += "..."
+                        embed.add_field(name="Currently Selected", value=selected_info, inline=False)
+                
+                # Add helpful footer
+                embed.set_footer(text="💡 Tip: Select a character from the dropdown to manage it")
             else:
                 embed.add_field(
                     name="No Characters",
                     value="Click 'Create Character' to get started!",
                     inline=False
                 )
+                embed.set_footer(text="💡 Tip: Create your first character to begin")
             
             if self.message:
                 await self.message.edit(embed=embed, view=self)
@@ -1921,6 +2035,8 @@ class UserCharacterManagementView(discord.ui.View):
         self.config_manager = config_manager
         self.selected_name = None
         self.message = None
+        self.page = 0
+        self.items_per_page = 20
         self.update_components()
     
     def update_components(self):
@@ -1930,9 +2046,15 @@ class UserCharacterManagementView(discord.ui.View):
         characters = self.config_manager.get_user_characters()
         
         if characters:
+            # Calculate pagination
+            start = self.page * self.items_per_page
+            end = start + self.items_per_page
+            paginated_characters = characters[start:end]
+            total_pages = (len(characters) + self.items_per_page - 1) // self.items_per_page
+            
             # Add character select menu
             options = []
-            for char in characters:
+            for char in paginated_characters:
                 display_name = char.get('display_name', char.get('name', 'Unknown'))
                 name = char.get('name', 'N/A')
                 description = char.get('description', '')[:50]
@@ -1945,7 +2067,7 @@ class UserCharacterManagementView(discord.ui.View):
                 )
             
             select = discord.ui.Select(
-                placeholder="Select a user character to view details",
+                placeholder=f"Select a user character (Page {self.page + 1}/{total_pages})",
                 options=options,
                 row=0
             )
@@ -1966,9 +2088,38 @@ class UserCharacterManagementView(discord.ui.View):
             delete_btn.callback = self.delete_character
             self.add_item(delete_btn)
         
+        # Add pagination buttons if needed
+        total_pages = (len(characters) + self.items_per_page - 1) // self.items_per_page if characters else 1
+        if total_pages > 1:
+            if self.page > 0:
+                prev_btn = discord.ui.Button(label="◀️ Previous", style=discord.ButtonStyle.secondary, row=2)
+                prev_btn.callback = self.previous_page
+                self.add_item(prev_btn)
+            
+            if self.page < total_pages - 1:
+                next_btn = discord.ui.Button(label="Next ▶️", style=discord.ButtonStyle.secondary, row=2)
+                next_btn.callback = self.next_page
+                self.add_item(next_btn)
+        
         close_btn = discord.ui.Button(label="❌ Close", style=discord.ButtonStyle.secondary, row=2)
         close_btn.callback = self.close
         self.add_item(close_btn)
+    
+    async def previous_page(self, interaction: discord.Interaction):
+        """Navigate to previous page"""
+        if self.page > 0:
+            self.page -= 1
+            await self.refresh_view(interaction)
+            await interaction.response.defer()
+    
+    async def next_page(self, interaction: discord.Interaction):
+        """Navigate to next page"""
+        characters = self.config_manager.get_user_characters()
+        total_pages = (len(characters) + self.items_per_page - 1) // self.items_per_page
+        if self.page < total_pages - 1:
+            self.page += 1
+            await self.refresh_view(interaction)
+            await interaction.response.defer()
     
     async def character_selected(self, interaction: discord.Interaction):
         """Handle character selection"""
@@ -1986,21 +2137,37 @@ class UserCharacterManagementView(discord.ui.View):
             embed = discord.Embed(
                 title="👥 User Character Management",
                 description="Manage your user/player characters interactively below.",
-                color=discord.Color.green()
+                color=discord.Color.purple()
             )
             
             if characters:
-                embed.add_field(
-                    name="Available User Characters",
-                    value=f"{len(characters)} character(s) configured",
-                    inline=False
-                )
+                # Display statistics in code block
+                stats = f"```\n"
+                stats += f"📊 Statistics\n"
+                stats += f"Total User Characters: {len(characters)}\n"
+                stats += f"```"
+                embed.add_field(name="Overview", value=stats, inline=False)
+                
+                # Show currently selected item if any
+                if self.selected_name:
+                    selected_char = self.config_manager.get_user_character_by_name(self.selected_name)
+                    if selected_char:
+                        display_name = selected_char.get('display_name', 'Unknown')
+                        description = selected_char.get('description', 'No description')[:100]
+                        selected_info = f"**{display_name}**\n{description}"
+                        if len(selected_char.get('description', '')) > 100:
+                            selected_info += "..."
+                        embed.add_field(name="Currently Selected", value=selected_info, inline=False)
+                
+                # Add helpful footer
+                embed.set_footer(text="💡 Tip: Select a user character from the dropdown to manage it")
             else:
                 embed.add_field(
                     name="No User Characters",
                     value="Click 'Create User Character' to get started!",
                     inline=False
                 )
+                embed.set_footer(text="💡 Tip: Create your first user character to begin")
             
             if self.message:
                 await self.message.edit(embed=embed, view=self)
