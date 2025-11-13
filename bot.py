@@ -832,137 +832,197 @@ class ConfigMenuView(discord.ui.View):
     @discord.ui.button(label="🔧 OpenAI Config", style=discord.ButtonStyle.primary, row=0)
     async def openai_config_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Configure OpenAI settings"""
-        await interaction.response.send_modal(OpenAIConfigModal(self.config_manager))
+        try:
+            await interaction.response.send_modal(OpenAIConfigModal(self.config_manager))
+        except Exception as e:
+            await interaction.response.send_message(
+                f"Error opening configuration modal: {str(e)}", 
+                ephemeral=True
+            )
     
     @discord.ui.button(label="🤖 Characters", style=discord.ButtonStyle.primary, row=0)
     async def characters_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         """View and manage characters"""
-        characters = self.config_manager.get_characters()
-        
-        if not characters:
-            await interaction.response.send_message("No characters configured.", ephemeral=True)
-            return
-        
-        embed = discord.Embed(
-            title="AI Characters",
-            description="Current AI characters in the system:",
-            color=discord.Color.blue()
-        )
-        
-        for i, char in enumerate(characters, 1):
-            embed.add_field(
-                name=f"{i}. {char.get('display_name', char.get('name', 'Unknown'))}",
-                value=f"**Name:** `{char.get('name', 'N/A')}`\n**Description:** {char.get('description', 'N/A')[:100]}...",
-                inline=False
+        try:
+            characters = self.config_manager.get_characters()
+            
+            if not characters:
+                await interaction.response.send_message("No characters configured.", ephemeral=True)
+                return
+            
+            embed = discord.Embed(
+                title="AI Characters",
+                description="Current AI characters in the system:",
+                color=discord.Color.blue()
             )
-        
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+            
+            for i, char in enumerate(characters, 1):
+                display_name = char.get('display_name', char.get('name', 'Unknown'))
+                name = char.get('name', 'N/A')
+                description = char.get('description', 'N/A')
+                
+                # Safely truncate description
+                if description and description != 'N/A' and len(description) > 100:
+                    description = description[:100] + "..."
+                
+                embed.add_field(
+                    name=f"{i}. {display_name}",
+                    value=f"**Name:** `{name}`\n**Description:** {description}",
+                    inline=False
+                )
+            
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(
+                f"Error viewing characters: {str(e)}", 
+                ephemeral=True
+            )
     
     @discord.ui.button(label="👥 User Characters", style=discord.ButtonStyle.primary, row=0)
     async def user_characters_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         """View and manage user characters"""
-        user_chars = self.config_manager.get_user_characters()
-        
-        if not user_chars:
-            await interaction.response.send_message("No user characters configured.", ephemeral=True)
-            return
-        
-        embed = discord.Embed(
-            title="User Characters",
-            description="Current user/player characters:",
-            color=discord.Color.green()
-        )
-        
-        for i, char in enumerate(user_chars, 1):
-            embed.add_field(
-                name=f"{i}. {char.get('display_name', char.get('name', 'Unknown'))}",
-                value=f"**Name:** `{char.get('name', 'N/A')}`\n**Description:** {char.get('description', 'N/A')[:100]}...",
-                inline=False
+        try:
+            user_chars = self.config_manager.get_user_characters()
+            
+            if not user_chars:
+                await interaction.response.send_message("No user characters configured.", ephemeral=True)
+                return
+            
+            embed = discord.Embed(
+                title="User Characters",
+                description="Current user/player characters:",
+                color=discord.Color.green()
             )
-        
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+            
+            for i, char in enumerate(user_chars, 1):
+                display_name = char.get('display_name', char.get('name', 'Unknown'))
+                name = char.get('name', 'N/A')
+                description = char.get('description', 'N/A')
+                
+                # Safely truncate description
+                if description and description != 'N/A' and len(description) > 100:
+                    description = description[:100] + "..."
+                
+                embed.add_field(
+                    name=f"{i}. {display_name}",
+                    value=f"**Name:** `{name}`\n**Description:** {description}",
+                    inline=False
+                )
+            
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(
+                f"Error viewing user characters: {str(e)}", 
+                ephemeral=True
+            )
     
     @discord.ui.button(label="⚙️ Bot Settings", style=discord.ButtonStyle.secondary, row=1)
     async def bot_settings_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         """View bot settings"""
-        reconnect_config = self.config_manager.get_reconnect_config()
-        
-        embed = discord.Embed(
-            title="Bot Settings",
-            description="Current bot configuration:",
-            color=discord.Color.gold()
-        )
-        
-        embed.add_field(
-            name="Reconnection",
-            value=f"**Enabled:** {reconnect_config.get('enabled', True)}\n"
-                  f"**Max Retries:** {reconnect_config.get('max_retries', 10)}\n"
-                  f"**Base Delay:** {reconnect_config.get('base_delay', 5)}s\n"
-                  f"**Max Delay:** {reconnect_config.get('max_delay', 300)}s",
-            inline=False
-        )
-        
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        try:
+            reconnect_config = self.config_manager.get_reconnect_config()
+            
+            embed = discord.Embed(
+                title="Bot Settings",
+                description="Current bot configuration:",
+                color=discord.Color.gold()
+            )
+            
+            embed.add_field(
+                name="Reconnection",
+                value=f"**Enabled:** {reconnect_config.get('enabled', True)}\n"
+                      f"**Max Retries:** {reconnect_config.get('max_retries', 10)}\n"
+                      f"**Base Delay:** {reconnect_config.get('base_delay', 5)}s\n"
+                      f"**Max Delay:** {reconnect_config.get('max_delay', 300)}s",
+                inline=False
+            )
+            
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(
+                f"Error viewing bot settings: {str(e)}", 
+                ephemeral=True
+            )
     
     @discord.ui.button(label="📚 Lorebooks", style=discord.ButtonStyle.secondary, row=1)
     async def lorebooks_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         """View lorebooks"""
-        lorebooks = self.config_manager.get_lorebooks()
-        
-        if not lorebooks:
-            await interaction.response.send_message("No lorebooks configured.", ephemeral=True)
-            return
-        
-        embed = discord.Embed(
-            title="Lorebooks",
-            description="Available lorebooks:",
-            color=discord.Color.purple()
-        )
-        
-        for lb in lorebooks:
-            status = "✅ Active" if lb.get("active", False) else "❌ Inactive"
-            entries_count = len(lb.get("entries", []))
-            embed.add_field(
-                name=f"{lb.get('name', 'Unknown')} ({status})",
-                value=f"Entries: {entries_count}",
-                inline=True
+        try:
+            lorebooks = self.config_manager.get_lorebooks()
+            
+            if not lorebooks:
+                await interaction.response.send_message("No lorebooks configured.", ephemeral=True)
+                return
+            
+            embed = discord.Embed(
+                title="Lorebooks",
+                description="Available lorebooks:",
+                color=discord.Color.purple()
             )
-        
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+            
+            for lb in lorebooks:
+                status = "✅ Active" if lb.get("active", False) else "❌ Inactive"
+                entries_count = len(lb.get("entries", []))
+                embed.add_field(
+                    name=f"{lb.get('name', 'Unknown')} ({status})",
+                    value=f"Entries: {entries_count}",
+                    inline=True
+                )
+            
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(
+                f"Error viewing lorebooks: {str(e)}", 
+                ephemeral=True
+            )
     
     @discord.ui.button(label="🎯 Presets", style=discord.ButtonStyle.secondary, row=1)
     async def presets_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         """View presets"""
-        presets = self.config_manager.get_presets()
-        active_preset = self.config_manager.get_active_preset()
-        
-        if not presets:
-            await interaction.response.send_message("No presets configured.", ephemeral=True)
-            return
-        
-        embed = discord.Embed(
-            title="AI Presets",
-            description="Available presets:",
-            color=discord.Color.orange()
-        )
-        
-        for preset in presets:
-            is_active = active_preset and active_preset.get("name") == preset.get("name")
-            status = "⭐ Active" if is_active else ""
+        try:
+            presets = self.config_manager.get_presets()
+            active_preset = self.config_manager.get_active_preset()
             
-            embed.add_field(
-                name=f"{preset.get('name', 'Unknown')} {status}",
-                value=f"Messages: {len(preset.get('messages', []))}",
-                inline=True
+            if not presets:
+                await interaction.response.send_message("No presets configured.", ephemeral=True)
+                return
+            
+            embed = discord.Embed(
+                title="AI Presets",
+                description="Available presets:",
+                color=discord.Color.orange()
             )
-        
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+            
+            for preset in presets:
+                is_active = active_preset and active_preset.get("name") == preset.get("name")
+                status = "⭐ Active" if is_active else ""
+                
+                embed.add_field(
+                    name=f"{preset.get('name', 'Unknown')} {status}",
+                    value=f"Messages: {len(preset.get('messages', []))}",
+                    inline=True
+                )
+            
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(
+                f"Error viewing presets: {str(e)}", 
+                ephemeral=True
+            )
     
     @discord.ui.button(label="❌ Close", style=discord.ButtonStyle.danger, row=2)
     async def close_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Close the menu"""
-        await interaction.response.send_message("Configuration menu closed.", ephemeral=True)
-        self.stop()
+        try:
+            await interaction.response.send_message("Configuration menu closed.", ephemeral=True)
+            self.stop()
+        except Exception as e:
+            # If response fails, try to defer and send as followup
+            try:
+                await interaction.followup.send(f"Menu closed with warning: {str(e)}", ephemeral=True)
+            except Exception:
+                pass
+            self.stop()
 
 
 class OpenAIConfigModal(discord.ui.Modal, title="Configure OpenAI Settings"):
@@ -2139,6 +2199,29 @@ class PresetBot(commands.Bot):
             await ctx.send("An error occurred while processing the command. Please check the console for details.")
 
 
+def _handle_retry(reconnect_enabled: bool, retry_count: int, max_retries: int, 
+                 base_delay: int, max_delay: int) -> bool:
+    """
+    Handle retry logic for connection failures.
+    
+    Returns:
+        bool: True if should retry, False if should exit
+    """
+    if not reconnect_enabled:
+        print("Reconnection is disabled. Exiting.")
+        return False
+    
+    if retry_count >= max_retries:
+        print(f"Max retries ({max_retries}) reached. Giving up.")
+        return False
+    
+    # Calculate delay with exponential backoff
+    delay = min(base_delay * (2 ** (retry_count - 1)), max_delay)
+    print(f"Will retry in {delay} seconds... (Attempt {retry_count}/{max_retries})")
+    time.sleep(delay)
+    return True
+
+
 def main():
     """Main entry point with automatic reconnection"""
     config_manager = ConfigManager()
@@ -2182,35 +2265,16 @@ def main():
             
         except discord.HTTPException as e:
             print(f"\n[ERROR] HTTP Exception: {str(e)}")
-            if not reconnect_enabled:
-                print("Reconnection is disabled. Exiting.")
-                break
-                
             retry_count += 1
-            if retry_count >= max_retries:
-                print(f"Max retries ({max_retries}) reached. Giving up.")
+            if not _handle_retry(reconnect_enabled, retry_count, max_retries, base_delay, max_delay):
                 break
-            
-            # Calculate delay with exponential backoff
-            delay = min(base_delay * (2 ** (retry_count - 1)), max_delay)
-            print(f"Will retry in {delay} seconds... (Attempt {retry_count}/{max_retries})")
-            time.sleep(delay)
             
         except discord.GatewayNotFound as e:
             print(f"\n[ERROR] Gateway not found: {str(e)}")
             print("Discord's gateway service may be down.")
-            if not reconnect_enabled:
-                print("Reconnection is disabled. Exiting.")
-                break
-                
             retry_count += 1
-            if retry_count >= max_retries:
-                print(f"Max retries ({max_retries}) reached. Giving up.")
+            if not _handle_retry(reconnect_enabled, retry_count, max_retries, base_delay, max_delay):
                 break
-            
-            delay = min(base_delay * (2 ** (retry_count - 1)), max_delay)
-            print(f"Will retry in {delay} seconds... (Attempt {retry_count}/{max_retries})")
-            time.sleep(delay)
             
         except KeyboardInterrupt:
             print("\n[INFO] Received keyboard interrupt. Shutting down...")
@@ -2220,19 +2284,9 @@ def main():
             print(f"\n[ERROR] Unexpected error: {str(e)}")
             import traceback
             print(traceback.format_exc())
-            
-            if not reconnect_enabled:
-                print("Reconnection is disabled. Exiting.")
-                break
-            
             retry_count += 1
-            if retry_count >= max_retries:
-                print(f"Max retries ({max_retries}) reached. Giving up.")
+            if not _handle_retry(reconnect_enabled, retry_count, max_retries, base_delay, max_delay):
                 break
-            
-            delay = min(base_delay * (2 ** (retry_count - 1)), max_delay)
-            print(f"Will retry in {delay} seconds... (Attempt {retry_count}/{max_retries})")
-            time.sleep(delay)
 
 
 if __name__ == "__main__":
