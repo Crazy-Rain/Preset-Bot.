@@ -37,20 +37,22 @@ Opens a modal form to configure OpenAI settings:
 The form pre-fills with your current settings, making it easy to update specific values.
 
 #### 🤖 Characters
-Displays all configured AI characters with their:
-- Display names
-- Internal names
-- Descriptions (truncated to 100 characters)
+Opens the **Interactive AI Character Management** interface with full control over AI characters:
+- **Select Character**: Dropdown menu to select a character for operations
+- **Create Character**: Create new AI characters with system prompts and avatars
+- **View Details**: See full character information including system prompts and avatars
+- **Delete Character**: Remove an AI character with confirmation dialog
 
-This is a view-only button that shows your current character configuration.
+**NEW!** AI characters can now be fully managed through Discord without command-line syntax.
 
 #### 👥 User Characters
-Shows all user/player characters configured in the system with:
-- Display names
-- Internal names
-- Descriptions (truncated to 100 characters)
+Opens the **Interactive User Character Management** interface with full control over user/player characters:
+- **Select Character**: Dropdown menu to select a character for operations
+- **Create User Character**: Create new user/player characters with descriptions and avatars
+- **View Details**: See full character information including descriptions and avatars
+- **Delete Character**: Remove a user character with confirmation dialog
 
-Useful for seeing which user characters are available for role-playing.
+**NEW!** User characters can now be fully managed through Discord without command-line syntax.
 
 #### ⚙️ Bot Settings
 Displays current bot configuration including:
@@ -61,10 +63,15 @@ Displays current bot configuration including:
   - Maximum delay between retries
 
 #### 📚 Lorebooks
-Lists all configured lorebooks showing:
-- Lorebook names
-- Active/Inactive status
-- Number of entries in each lorebook
+Opens the **Interactive Lorebook Management** interface with full control over lorebooks:
+- **Select Lorebook**: Dropdown menu to select a lorebook for operations
+- **Create Lorebook**: Create new lorebooks with a unique name
+- **Toggle Active/Inactive**: Enable or disable selected lorebook
+- **Add Entry**: Add new constant or normal entries with keywords
+- **View Entries**: See all entries in the selected lorebook (paginated)
+- **Delete Lorebook**: Remove a lorebook with confirmation dialog
+
+**NEW!** Lorebooks can now be fully managed through Discord without command-line syntax or accessing the host machine.
 
 #### 🎯 Presets
 Shows all AI presets with:
@@ -76,6 +83,43 @@ Shows all AI presets with:
 Closes the configuration menu.
 
 ## Usage Examples
+
+### Managing Lorebooks Interactively (NEW!)
+
+1. Type `!config` in Discord
+2. Click the "📚 Lorebooks" button
+3. You'll see the Lorebook Management interface
+
+**To Create a New Lorebook:**
+- Click "➕ Create Lorebook"
+- Enter a unique name in the modal
+- Click "Submit"
+- The lorebook is created and automatically activated
+
+**To Toggle a Lorebook Active/Inactive:**
+- Select a lorebook from the dropdown menu
+- Click "🔄 Toggle Active/Inactive"
+- The status will be toggled instantly
+
+**To Add an Entry:**
+- Select a lorebook from the dropdown menu
+- Click "📝 Add Entry"
+- Fill in the modal form:
+  - **Entry Content**: The text to inject into conversations
+  - **Entry Type**: Either "constant" (always active) or "normal" (keyword-triggered)
+  - **Keywords**: Comma-separated keywords (only for normal entries)
+- Click "Submit"
+
+**To View Entries:**
+- Select a lorebook from the dropdown menu
+- Click "👁️ View Entries"
+- See all entries with their types, content, and keywords (first 10 shown)
+
+**To Delete a Lorebook:**
+- Select a lorebook from the dropdown menu
+- Click "🗑️ Delete Lorebook"
+- Confirm deletion in the dialog
+- The lorebook and all its entries will be removed
 
 ### Configuring OpenAI Settings
 
@@ -101,6 +145,51 @@ Closes the configuration menu.
 2. Click the "⚙️ Bot Settings" button
 3. Review the current reconnection configuration
 4. The settings are displayed in an easy-to-read embed
+
+### Managing AI Characters Interactively (NEW!)
+
+1. Type `!config` in Discord
+2. Click the "🤖 Characters" button
+3. You'll see the AI Character Management interface
+
+**To Create a New AI Character:**
+- Click "➕ Create Character"
+- Fill in the modal form:
+  - **Character Name**: Internal identifier (e.g., "assistant", "narrator")
+  - **Display Name**: Name shown in Discord
+  - **System Prompt/Description**: The AI's personality and behavior instructions
+  - **Avatar URL**: Optional image URL for the character
+- Click "Submit"
+- The character is created instantly
+
+**To View Character Details:**
+- Select a character from the dropdown menu
+- Click "👁️ View Details"
+- See full information including system prompt and avatar
+
+**To Delete a Character:**
+- Select a character from the dropdown menu
+- Click "🗑️ Delete Character"
+- Confirm deletion in the dialog
+
+### Managing User Characters Interactively (NEW!)
+
+1. Type `!config` in Discord
+2. Click the "👥 User Characters" button
+3. You'll see the User Character Management interface
+
+**To Create a New User Character:**
+- Click "➕ Create User Character"
+- Fill in the modal form:
+  - **Character Name**: Internal identifier (e.g., "john", "alice")
+  - **Display Name**: Name shown in Discord
+  - **Character Description**: Background and personality of the character
+  - **Avatar URL**: Optional image URL for the character
+- Click "Submit"
+- The character is created instantly
+
+**To View/Delete User Characters:**
+- Same workflow as AI characters using the dropdown menu and buttons
 
 ## Security Features
 
@@ -129,34 +218,50 @@ The configuration menu automatically expires after **3 minutes** of inactivity. 
 ## Technical Details
 
 ### View Components
-The configuration system uses two main Discord UI components:
+The configuration system uses multiple Discord UI components:
 
 1. **ConfigMenuView**: A View with buttons for different configuration categories
 2. **OpenAIConfigModal**: A Modal form for inputting OpenAI settings
+3. **LorebookManagementView**: Interactive view for managing lorebooks (NEW!)
+4. **CreateLorebookModal**: Modal form for creating new lorebooks (NEW!)
+5. **AddLorebookEntryModal**: Modal form for adding lorebook entries (NEW!)
+6. **ConfirmDeleteView**: Confirmation dialog for deleting lorebooks (NEW!)
+7. **CharacterManagementView**: Interactive view for managing AI characters (NEW!)
+8. **UserCharacterManagementView**: Interactive view for managing user characters (NEW!)
+9. **CreateCharacterModal**: Modal form for creating AI characters (NEW!)
+10. **CreateUserCharacterModal**: Modal form for creating user characters (NEW!)
+11. **ConfirmCharacterDeleteView**: Confirmation dialog for deleting characters (NEW!)
+12. **ConfirmUserCharacterDeleteView**: Confirmation dialog for deleting user characters (NEW!)
 
 ### Configuration Changes
-- Changes made through the OpenAI Config modal are immediately saved to `config.json`
+- Changes made through modals are immediately saved to `config.json`
 - The bot's AI handler will use the new settings for subsequent requests
 - No bot restart is required
+- Lorebook and character changes take effect immediately in ongoing conversations
 
 ### Limitations
 
 Current limitations of the interactive configuration system:
 
-1. **View-Only for Some Categories**: Characters, user characters, lorebooks, and presets are currently view-only through the menu
-2. **Full Management Still Requires Commands**: For adding/deleting/editing characters and lorebooks, use the respective commands
-3. **GUI Still Needed for Complex Operations**: Creating presets with multiple message blocks is easier through the GUI
+1. **View-Only for Presets**: Presets are currently view-only through the menu
+2. **Full Management for Lorebooks**: ✅ Lorebooks can now be fully managed interactively! (NEW!)
+3. **Full Management for Characters**: ✅ AI and User characters can now be fully managed interactively! (NEW!)
+4. **GUI Still Needed for Complex Operations**: Creating presets with multiple message blocks is easier through the GUI
+5. **Character Editing**: Characters can be created and deleted but not edited yet (coming soon!)
 
 ## Future Enhancements
 
 Potential future improvements to the interactive configuration system:
 
-- Add/Edit/Delete characters through modals
+- Edit existing AI and user characters through modals
 - Preset management with select menus
-- Lorebook entry management
-- User character creation and editing
+- ~~Lorebook entry management~~ ✅ **COMPLETED!**
+- ~~AI character creation and deletion~~ ✅ **COMPLETED!**
+- ~~User character creation and deletion~~ ✅ **COMPLETED!**
 - Reconnection settings modification
 - Token management through modal
+- Delete individual lorebook entries interactively
+- Batch operations for multiple items
 
 ## Troubleshooting
 
@@ -171,6 +276,20 @@ Potential future improvements to the interactive configuration system:
 ### Configuration Changes Not Applied
 **Problem**: Changes made through the config modal don't seem to take effect.
 **Solution**: Check the bot's console for any error messages. Verify that `config.json` was updated successfully.
+
+### Lorebook Management Issues (NEW!)
+
+**Problem**: "Please select a lorebook first using the dropdown menu."
+**Solution**: Make sure to click on a lorebook in the dropdown menu at the top before using buttons like Toggle, Add Entry, View Entries, or Delete.
+
+**Problem**: Cannot create a lorebook with the same name.
+**Solution**: Lorebook names must be unique. Choose a different name or delete the existing lorebook first.
+
+**Problem**: Keywords not working for normal entries.
+**Solution**: Ensure keywords are comma-separated (e.g., "dragon, dragons, drake"). Keywords are case-insensitive and match partial words.
+
+**Problem**: Entry content is truncated when viewing.
+**Solution**: The view shows truncated content to fit Discord's embed limits. Use `!lorebook show <name>` command to see full content of all entries.
 
 ## Related Commands
 

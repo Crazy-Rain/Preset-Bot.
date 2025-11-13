@@ -843,77 +843,71 @@ class ConfigMenuView(discord.ui.View):
     
     @discord.ui.button(label="🤖 Characters", style=discord.ButtonStyle.primary, row=0)
     async def characters_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """View and manage characters"""
+        """Manage AI characters interactively"""
         try:
             characters = self.config_manager.get_characters()
             
-            if not characters:
-                await interaction.response.send_message("No characters configured.", ephemeral=True)
-                return
-            
             embed = discord.Embed(
-                title="AI Characters",
-                description="Current AI characters in the system:",
+                title="🤖 AI Character Management",
+                description="Manage your AI characters interactively below.",
                 color=discord.Color.blue()
             )
             
-            for i, char in enumerate(characters, 1):
-                display_name = char.get('display_name', char.get('name', 'Unknown'))
-                name = char.get('name', 'N/A')
-                description = char.get('description', 'N/A')
-                
-                # Safely truncate description
-                if description and description != 'N/A' and len(description) > 100:
-                    description = description[:100] + "..."
-                
+            if characters:
                 embed.add_field(
-                    name=f"{i}. {display_name}",
-                    value=f"**Name:** `{name}`\n**Description:** {description}",
+                    name="Available Characters",
+                    value=f"{len(characters)} character(s) configured",
+                    inline=False
+                )
+            else:
+                embed.add_field(
+                    name="No Characters",
+                    value="Click 'Create Character' to get started!",
                     inline=False
                 )
             
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            view = CharacterManagementView(self.config_manager)
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+            # Store the message for refresh capability
+            view.message = await interaction.original_response()
         except Exception as e:
             await interaction.response.send_message(
-                f"Error viewing characters: {str(e)}", 
+                f"Error opening character management: {str(e)}", 
                 ephemeral=True
             )
     
     @discord.ui.button(label="👥 User Characters", style=discord.ButtonStyle.primary, row=0)
     async def user_characters_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """View and manage user characters"""
+        """Manage user characters interactively"""
         try:
             user_chars = self.config_manager.get_user_characters()
             
-            if not user_chars:
-                await interaction.response.send_message("No user characters configured.", ephemeral=True)
-                return
-            
             embed = discord.Embed(
-                title="User Characters",
-                description="Current user/player characters:",
+                title="👥 User Character Management",
+                description="Manage your user/player characters interactively below.",
                 color=discord.Color.green()
             )
             
-            for i, char in enumerate(user_chars, 1):
-                display_name = char.get('display_name', char.get('name', 'Unknown'))
-                name = char.get('name', 'N/A')
-                description = char.get('description', 'N/A')
-                
-                # Safely truncate description
-                if description and description != 'N/A' and len(description) > 100:
-                    description = description[:100] + "..."
-                
+            if user_chars:
                 embed.add_field(
-                    name=f"{i}. {display_name}",
-                    value=f"**Name:** `{name}`\n**Description:** {description}",
+                    name="Available User Characters",
+                    value=f"{len(user_chars)} character(s) configured",
+                    inline=False
+                )
+            else:
+                embed.add_field(
+                    name="No User Characters",
+                    value="Click 'Create User Character' to get started!",
                     inline=False
                 )
             
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            view = UserCharacterManagementView(self.config_manager)
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+            # Store the message for refresh capability
+            view.message = await interaction.original_response()
         except Exception as e:
             await interaction.response.send_message(
-                f"Error viewing user characters: {str(e)}", 
+                f"Error opening user character management: {str(e)}", 
                 ephemeral=True
             )
     
@@ -947,33 +941,36 @@ class ConfigMenuView(discord.ui.View):
     
     @discord.ui.button(label="📚 Lorebooks", style=discord.ButtonStyle.secondary, row=1)
     async def lorebooks_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """View lorebooks"""
+        """Manage lorebooks interactively"""
         try:
             lorebooks = self.config_manager.get_lorebooks()
             
-            if not lorebooks:
-                await interaction.response.send_message("No lorebooks configured.", ephemeral=True)
-                return
-            
             embed = discord.Embed(
-                title="Lorebooks",
-                description="Available lorebooks:",
+                title="📚 Lorebook Management",
+                description="Manage your lorebooks interactively below.",
                 color=discord.Color.purple()
             )
             
-            for lb in lorebooks:
-                status = "✅ Active" if lb.get("active", False) else "❌ Inactive"
-                entries_count = len(lb.get("entries", []))
+            if lorebooks:
                 embed.add_field(
-                    name=f"{lb.get('name', 'Unknown')} ({status})",
-                    value=f"Entries: {entries_count}",
-                    inline=True
+                    name="Available Lorebooks",
+                    value=f"{len(lorebooks)} lorebook(s) configured",
+                    inline=False
+                )
+            else:
+                embed.add_field(
+                    name="No Lorebooks",
+                    value="Click 'Create Lorebook' to get started!",
+                    inline=False
                 )
             
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            view = LorebookManagementView(self.config_manager)
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+            # Store the message for refresh capability
+            view.message = await interaction.original_response()
         except Exception as e:
             await interaction.response.send_message(
-                f"Error viewing lorebooks: {str(e)}", 
+                f"Error opening lorebook management: {str(e)}", 
                 ephemeral=True
             )
     
@@ -1104,6 +1101,2166 @@ class OpenAIConfigModal(discord.ui.Modal, title="Configure OpenAI Settings"):
                 f"Error updating configuration: {str(e)}", 
                 ephemeral=True
             )
+
+
+class CreateLorebookModal(discord.ui.Modal, title="Create New Lorebook"):
+    """Modal for creating a new lorebook"""
+    
+    def __init__(self, config_manager: ConfigManager, parent_view=None):
+        super().__init__()
+        self.config_manager = config_manager
+        self.parent_view = parent_view
+        
+        self.name = discord.ui.TextInput(
+            label="Lorebook Name",
+            placeholder="Enter a unique name for the lorebook",
+            required=True,
+            max_length=50
+        )
+        self.add_item(self.name)
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        """Handle form submission"""
+        try:
+            name = self.name.value.strip()
+            
+            # Check if lorebook already exists
+            if self.config_manager.get_lorebook_by_name(name):
+                await interaction.response.send_message(
+                    f"❌ Error: Lorebook '{name}' already exists.",
+                    ephemeral=True
+                )
+                return
+            
+            # Create the lorebook
+            self.config_manager.add_lorebook(name, active=True)
+            
+            embed = discord.Embed(
+                title="✅ Lorebook Created",
+                description=f"Lorebook '{name}' has been created and activated.",
+                color=discord.Color.green()
+            )
+            
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            
+            # Refresh parent view if provided
+            if self.parent_view:
+                await self.parent_view.refresh_view(interaction)
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error creating lorebook: {str(e)}",
+                ephemeral=True
+            )
+
+
+class AddLorebookEntryModal(discord.ui.Modal, title="Add Lorebook Entry"):
+    """Modal for adding a new lorebook entry"""
+    
+    def __init__(self, config_manager: ConfigManager, lorebook_name: str, parent_view=None):
+        super().__init__()
+        self.config_manager = config_manager
+        self.lorebook_name = lorebook_name
+        self.parent_view = parent_view
+        
+        self.content = discord.ui.TextInput(
+            label="Entry Content",
+            placeholder="Enter the content for this entry",
+            required=True,
+            max_length=2000,
+            style=discord.TextStyle.paragraph
+        )
+        self.add_item(self.content)
+        
+        self.entry_type = discord.ui.TextInput(
+            label="Entry Type",
+            placeholder="constant or normal",
+            required=True,
+            max_length=10,
+            default="normal"
+        )
+        self.add_item(self.entry_type)
+        
+        self.keywords = discord.ui.TextInput(
+            label="Keywords (for normal entries)",
+            placeholder="keyword1, keyword2, keyword3",
+            required=False,
+            max_length=200
+        )
+        self.add_item(self.keywords)
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        """Handle form submission"""
+        try:
+            content = self.content.value.strip()
+            entry_type = self.entry_type.value.strip().lower()
+            
+            # Validate entry type
+            if entry_type not in ["constant", "normal"]:
+                await interaction.response.send_message(
+                    "❌ Error: Entry type must be 'constant' or 'normal'.",
+                    ephemeral=True
+                )
+                return
+            
+            # Parse keywords
+            keywords = []
+            if entry_type == "normal" and self.keywords.value:
+                keywords = [k.strip() for k in self.keywords.value.split(",") if k.strip()]
+            
+            # Add entry
+            if self.config_manager.add_lorebook_entry(self.lorebook_name, content, entry_type, keywords):
+                embed = discord.Embed(
+                    title="✅ Entry Added",
+                    description=f"Entry added to lorebook '{self.lorebook_name}'",
+                    color=discord.Color.green()
+                )
+                embed.add_field(name="Type", value=entry_type.upper(), inline=True)
+                if keywords:
+                    embed.add_field(name="Keywords", value=", ".join(keywords), inline=True)
+                embed.add_field(name="Content", value=content[:100] + "..." if len(content) > 100 else content, inline=False)
+                
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                
+                # Refresh parent view if provided
+                if self.parent_view:
+                    await self.parent_view.refresh_view(interaction)
+            else:
+                await interaction.response.send_message(
+                    f"❌ Error: Could not add entry to lorebook '{self.lorebook_name}'.",
+                    ephemeral=True
+                )
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error adding entry: {str(e)}",
+                ephemeral=True
+            )
+
+
+class EditEntryModal(discord.ui.Modal, title="Edit Lorebook Entry"):
+    """Modal for editing an existing lorebook entry"""
+    
+    def __init__(self, config_manager: ConfigManager, lorebook_name: str, entry_index: int, entry: dict, parent_view=None):
+        super().__init__()
+        self.config_manager = config_manager
+        self.lorebook_name = lorebook_name
+        self.entry_index = entry_index
+        self.parent_view = parent_view
+        
+        # Pre-fill with existing values
+        self.content = discord.ui.TextInput(
+            label="Entry Content",
+            placeholder="Enter the content for this entry",
+            required=True,
+            max_length=2000,
+            style=discord.TextStyle.paragraph,
+            default=entry.get('content', '')
+        )
+        self.add_item(self.content)
+        
+        self.entry_type = discord.ui.TextInput(
+            label="Entry Type",
+            placeholder="constant or normal",
+            required=True,
+            max_length=10,
+            default=entry.get('insertion_type', 'normal')
+        )
+        self.add_item(self.entry_type)
+        
+        keywords_str = ", ".join(entry.get('keywords', []))
+        self.keywords = discord.ui.TextInput(
+            label="Keywords (for normal entries)",
+            placeholder="keyword1, keyword2, keyword3",
+            required=False,
+            max_length=200,
+            default=keywords_str
+        )
+        self.add_item(self.keywords)
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        """Handle form submission"""
+        try:
+            content = self.content.value.strip()
+            entry_type = self.entry_type.value.strip().lower()
+            
+            # Validate entry type
+            if entry_type not in ["constant", "normal"]:
+                await interaction.response.send_message(
+                    "❌ Error: Entry type must be 'constant' or 'normal'.",
+                    ephemeral=True
+                )
+                return
+            
+            # Parse keywords
+            keywords = []
+            if entry_type == "normal" and self.keywords.value:
+                keywords = [k.strip() for k in self.keywords.value.split(",") if k.strip()]
+            
+            # Update entry
+            lorebook = self.config_manager.get_lorebook_by_name(self.lorebook_name)
+            if lorebook and 0 <= self.entry_index < len(lorebook.get('entries', [])):
+                lorebook['entries'][self.entry_index] = {
+                    'content': content,
+                    'insertion_type': entry_type,
+                    'keywords': keywords
+                }
+                self.config_manager.save_config()
+                
+                embed = discord.Embed(
+                    title="✅ Entry Updated",
+                    description=f"Entry updated in lorebook '{self.lorebook_name}'",
+                    color=discord.Color.green()
+                )
+                embed.add_field(name="Type", value=entry_type.upper(), inline=True)
+                if keywords:
+                    embed.add_field(name="Keywords", value=", ".join(keywords), inline=True)
+                embed.add_field(name="Content", value=content[:100] + "..." if len(content) > 100 else content, inline=False)
+                
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                
+                # Refresh parent view if provided
+                if self.parent_view:
+                    await self.parent_view.refresh_view(interaction)
+            else:
+                await interaction.response.send_message(
+                    f"❌ Error: Could not update entry in lorebook '{self.lorebook_name}'.",
+                    ephemeral=True
+                )
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error updating entry: {str(e)}",
+                ephemeral=True
+            )
+
+
+class EntryEditView(discord.ui.View):
+    """View for selecting an entry to edit"""
+    
+    def __init__(self, config_manager: ConfigManager, lorebook_name: str, parent_view=None, timeout=180):
+        super().__init__(timeout=timeout)
+        self.config_manager = config_manager
+        self.lorebook_name = lorebook_name
+        self.parent_view = parent_view
+        
+        lorebook = config_manager.get_lorebook_by_name(lorebook_name)
+        if lorebook and lorebook.get('entries'):
+            entries = lorebook['entries']
+            
+            # Create select menu with entries
+            options = []
+            for i, entry in enumerate(entries):
+                content = entry.get('content', 'No content')
+                entry_type = entry.get('insertion_type', 'normal')
+                label = f"{entry_type.upper()[:4]} | {content[:40]}"
+                if len(content) > 40:
+                    label += "..."
+                
+                options.append(
+                    discord.SelectOption(
+                        label=label,
+                        value=str(i),
+                        description=f"Entry {i+1} of {len(entries)}"
+                    )
+                )
+            
+            select = discord.ui.Select(
+                placeholder="Select an entry to edit",
+                options=options,
+                row=0
+            )
+            select.callback = self.entry_selected
+            self.add_item(select)
+        
+        # Add close button
+        close_btn = discord.ui.Button(label="❌ Cancel", style=discord.ButtonStyle.secondary, row=1)
+        close_btn.callback = self.close
+        self.add_item(close_btn)
+    
+    async def entry_selected(self, interaction: discord.Interaction):
+        """Handle entry selection"""
+        entry_index = int(interaction.data['values'][0])
+        lorebook = self.config_manager.get_lorebook_by_name(self.lorebook_name)
+        
+        if lorebook and 0 <= entry_index < len(lorebook.get('entries', [])):
+            entry = lorebook['entries'][entry_index]
+            modal = EditEntryModal(self.config_manager, self.lorebook_name, entry_index, entry, parent_view=self.parent_view)
+            await interaction.response.send_modal(modal)
+        else:
+            await interaction.response.send_message(
+                "❌ Error: Invalid entry selection.",
+                ephemeral=True
+            )
+    
+    async def close(self, interaction: discord.Interaction):
+        """Close the entry edit view"""
+        await interaction.response.send_message("Entry editing cancelled.", ephemeral=True)
+        self.stop()
+
+
+class SearchLorebookModal(discord.ui.Modal, title="Search Lorebooks"):
+    """Modal for searching lorebooks"""
+    
+    def __init__(self, config_manager: ConfigManager):
+        super().__init__()
+        self.config_manager = config_manager
+        
+        self.search_term = discord.ui.TextInput(
+            label="Search Term",
+            placeholder="Enter lorebook name or entry content to search",
+            required=True,
+            max_length=100
+        )
+        self.add_item(self.search_term)
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        """Handle search submission"""
+        try:
+            term = self.search_term.value.strip().lower()
+            lorebooks = self.config_manager.get_lorebooks()
+            
+            results = []
+            for lorebook in lorebooks:
+                name = lorebook.get('name', '')
+                # Search in name
+                if term in name.lower():
+                    results.append((lorebook, 'name'))
+                    continue
+                
+                # Search in entry content
+                for entry in lorebook.get('entries', []):
+                    content = entry.get('content', '').lower()
+                    if term in content:
+                        results.append((lorebook, 'entry'))
+                        break
+            
+            if results:
+                embed = discord.Embed(
+                    title=f"🔍 Search Results for '{self.search_term.value}'",
+                    description=f"Found {len(results)} lorebook(s)",
+                    color=discord.Color.blue()
+                )
+                
+                # Show max 10 results
+                for i, (lorebook, match_type) in enumerate(results[:10]):
+                    name = lorebook.get('name', 'Unknown')
+                    active = lorebook.get('active', False)
+                    status_icon = "🟢" if active else "🔴"
+                    entry_count = len(lorebook.get('entries', []))
+                    
+                    match_info = "name match" if match_type == 'name' else "entry match"
+                    value = f"{status_icon} {entry_count} entries | {match_info}"
+                    
+                    embed.add_field(
+                        name=f"{i+1}. {name}",
+                        value=value,
+                        inline=False
+                    )
+                
+                if len(results) > 10:
+                    embed.set_footer(text=f"Showing 10 of {len(results)} results")
+            else:
+                embed = discord.Embed(
+                    title=f"🔍 Search Results for '{self.search_term.value}'",
+                    description="No lorebooks found matching your search.",
+                    color=discord.Color.orange()
+                )
+            
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error searching: {str(e)}",
+                ephemeral=True
+            )
+
+
+class SearchCharacterModal(discord.ui.Modal, title="Search Characters"):
+    """Modal for searching AI characters"""
+    
+    def __init__(self, config_manager: ConfigManager):
+        super().__init__()
+        self.config_manager = config_manager
+        
+        self.search_term = discord.ui.TextInput(
+            label="Search Term",
+            placeholder="Enter character name or description to search",
+            required=True,
+            max_length=100
+        )
+        self.add_item(self.search_term)
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        """Handle search submission"""
+        try:
+            term = self.search_term.value.strip().lower()
+            characters = self.config_manager.get_characters()
+            
+            results = []
+            for char in characters:
+                name = char.get('name', '').lower()
+                display_name = char.get('display_name', '').lower()
+                description = char.get('description', '').lower()
+                
+                if term in name or term in display_name or term in description:
+                    results.append(char)
+            
+            if results:
+                embed = discord.Embed(
+                    title=f"🔍 Search Results for '{self.search_term.value}'",
+                    description=f"Found {len(results)} character(s)",
+                    color=discord.Color.blue()
+                )
+                
+                # Show max 10 results
+                for i, char in enumerate(results[:10]):
+                    name = char.get('name', 'Unknown')
+                    display_name = char.get('display_name', name)
+                    description = char.get('description', 'No description')[:50]
+                    
+                    value = f"**Display:** {display_name}\n{description}"
+                    if len(char.get('description', '')) > 50:
+                        value += "..."
+                    
+                    embed.add_field(
+                        name=f"{i+1}. {name}",
+                        value=value,
+                        inline=False
+                    )
+                
+                if len(results) > 10:
+                    embed.set_footer(text=f"Showing 10 of {len(results)} results")
+            else:
+                embed = discord.Embed(
+                    title=f"🔍 Search Results for '{self.search_term.value}'",
+                    description="No characters found matching your search.",
+                    color=discord.Color.orange()
+                )
+            
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error searching: {str(e)}",
+                ephemeral=True
+            )
+
+
+class SearchUserCharacterModal(discord.ui.Modal, title="Search User Characters"):
+    """Modal for searching user characters"""
+    
+    def __init__(self, config_manager: ConfigManager):
+        super().__init__()
+        self.config_manager = config_manager
+        
+        self.search_term = discord.ui.TextInput(
+            label="Search Term",
+            placeholder="Enter character name or description to search",
+            required=True,
+            max_length=100
+        )
+        self.add_item(self.search_term)
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        """Handle search submission"""
+        try:
+            term = self.search_term.value.strip().lower()
+            characters = self.config_manager.get_user_characters()
+            
+            results = []
+            for char in characters:
+                name = char.get('name', '').lower()
+                display_name = char.get('display_name', '').lower()
+                description = char.get('description', '').lower()
+                
+                if term in name or term in display_name or term in description:
+                    results.append(char)
+            
+            if results:
+                embed = discord.Embed(
+                    title=f"🔍 Search Results for '{self.search_term.value}'",
+                    description=f"Found {len(results)} user character(s)",
+                    color=discord.Color.blue()
+                )
+                
+                # Show max 10 results
+                for i, char in enumerate(results[:10]):
+                    name = char.get('name', 'Unknown')
+                    display_name = char.get('display_name', name)
+                    description = char.get('description', 'No description')[:50]
+                    
+                    value = f"**Display:** {display_name}\n{description}"
+                    if len(char.get('description', '')) > 50:
+                        value += "..."
+                    
+                    embed.add_field(
+                        name=f"{i+1}. {name}",
+                        value=value,
+                        inline=False
+                    )
+                
+                if len(results) > 10:
+                    embed.set_footer(text=f"Showing 10 of {len(results)} results")
+            else:
+                embed = discord.Embed(
+                    title=f"🔍 Search Results for '{self.search_term.value}'",
+                    description="No user characters found matching your search.",
+                    color=discord.Color.orange()
+                )
+            
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error searching: {str(e)}",
+                ephemeral=True
+            )
+
+
+class LorebookManagementView(discord.ui.View):
+    """Interactive view for managing lorebooks"""
+    
+    def __init__(self, config_manager: ConfigManager, timeout=180):
+        super().__init__(timeout=timeout)
+        self.config_manager = config_manager
+        self.selected_name = None
+        self.message = None
+        self.page = 0
+        self.items_per_page = 20
+        self.update_components()
+    
+    def update_components(self):
+        """Update the select menu with current lorebooks"""
+        self.clear_items()
+        
+        lorebooks = self.config_manager.get_lorebooks()
+        
+        if lorebooks:
+            # Calculate pagination
+            start = self.page * self.items_per_page
+            end = start + self.items_per_page
+            paginated_lorebooks = lorebooks[start:end]
+            total_pages = (len(lorebooks) + self.items_per_page - 1) // self.items_per_page
+            
+            # Add lorebook select menu (Row 0)
+            options = []
+            for lb in paginated_lorebooks:
+                status = "✅" if lb.get("active", False) else "❌"
+                entry_count = len(lb.get("entries", []))
+                name = lb.get('name', 'Unknown')
+                options.append(
+                    discord.SelectOption(
+                        label=f"{status} {name}",
+                        value=name,
+                        description=f"{entry_count} entries"
+                    )
+                )
+            
+            select = discord.ui.Select(
+                placeholder=f"Select a lorebook (Page {self.page + 1}/{total_pages})",
+                options=options,
+                row=0
+            )
+            select.callback = self.lorebook_selected
+            self.add_item(select)
+        
+        # Row 1: Primary Actions (max 4 buttons)
+        create_btn = discord.ui.Button(label="➕ Create Lorebook", style=discord.ButtonStyle.success, row=1)
+        create_btn.callback = self.create_lorebook
+        self.add_item(create_btn)
+        
+        if lorebooks:
+            toggle_btn = discord.ui.Button(label="🔄 Toggle Active/Inactive", style=discord.ButtonStyle.primary, row=1)
+            toggle_btn.callback = self.toggle_lorebook
+            self.add_item(toggle_btn)
+            
+            add_entry_btn = discord.ui.Button(label="📝 Add Entry", style=discord.ButtonStyle.primary, row=1)
+            add_entry_btn.callback = self.add_entry
+            self.add_item(add_entry_btn)
+            
+            edit_entry_btn = discord.ui.Button(label="✏️ Edit Entry", style=discord.ButtonStyle.primary, row=1)
+            edit_entry_btn.callback = self.edit_entry
+            # Disable button if no lorebook selected or no entries
+            if not self.selected_name:
+                edit_entry_btn.disabled = True
+            else:
+                lorebook = self.config_manager.get_lorebook_by_name(self.selected_name)
+                if not lorebook or not lorebook.get('entries'):
+                    edit_entry_btn.disabled = True
+            self.add_item(edit_entry_btn)
+        
+        # Row 2: Secondary Actions (max 3 buttons)
+        if lorebooks:
+            view_entries_btn = discord.ui.Button(label="👁️ View Entries", style=discord.ButtonStyle.secondary, row=2)
+            view_entries_btn.callback = self.view_entries
+            self.add_item(view_entries_btn)
+            
+            duplicate_btn = discord.ui.Button(label="📋 Duplicate", style=discord.ButtonStyle.secondary, row=2)
+            duplicate_btn.callback = self.duplicate_lorebook
+            self.add_item(duplicate_btn)
+            
+            delete_btn = discord.ui.Button(label="🗑️ Delete Lorebook", style=discord.ButtonStyle.danger, row=2)
+            delete_btn.callback = self.delete_lorebook
+            self.add_item(delete_btn)
+        
+        # Row 3: Utility Actions (max 3 buttons)
+        if lorebooks:
+            toggle_all_btn = discord.ui.Button(label="🔄 Toggle All", style=discord.ButtonStyle.primary, row=3)
+            toggle_all_btn.callback = self.toggle_all_lorebooks
+            self.add_item(toggle_all_btn)
+            
+            export_btn = discord.ui.Button(label="📤 Export", style=discord.ButtonStyle.secondary, row=3)
+            export_btn.callback = self.export_lorebook
+            self.add_item(export_btn)
+        
+        search_btn = discord.ui.Button(label="🔍 Search", style=discord.ButtonStyle.secondary, row=3)
+        search_btn.callback = self.search_lorebooks
+        self.add_item(search_btn)
+        
+        # Row 4: Navigation & Help (max 4 buttons in worst case)
+        # Add pagination buttons if needed
+        total_pages = (len(lorebooks) + self.items_per_page - 1) // self.items_per_page if lorebooks else 1
+        if total_pages > 1:
+            if self.page > 0:
+                prev_btn = discord.ui.Button(label="◀️ Previous", style=discord.ButtonStyle.secondary, row=4)
+                prev_btn.callback = self.previous_page
+                self.add_item(prev_btn)
+            
+            if self.page < total_pages - 1:
+                next_btn = discord.ui.Button(label="Next ▶️", style=discord.ButtonStyle.secondary, row=4)
+                next_btn.callback = self.next_page
+                self.add_item(next_btn)
+        
+        help_btn = discord.ui.Button(label="ℹ️ Help", style=discord.ButtonStyle.secondary, row=4)
+        help_btn.callback = self.show_help
+        self.add_item(help_btn)
+        
+        close_btn = discord.ui.Button(label="❌ Close", style=discord.ButtonStyle.secondary, row=4)
+        close_btn.callback = self.close
+        self.add_item(close_btn)
+    
+    async def previous_page(self, interaction: discord.Interaction):
+        """Navigate to previous page"""
+        if self.page > 0:
+            self.page -= 1
+            await self.refresh_view(interaction)
+            await interaction.response.defer()
+    
+    async def next_page(self, interaction: discord.Interaction):
+        """Navigate to next page"""
+        lorebooks = self.config_manager.get_lorebooks()
+        total_pages = (len(lorebooks) + self.items_per_page - 1) // self.items_per_page
+        if self.page < total_pages - 1:
+            self.page += 1
+            await self.refresh_view(interaction)
+            await interaction.response.defer()
+    
+    async def lorebook_selected(self, interaction: discord.Interaction):
+        """Handle lorebook selection"""
+        # Store the selected name for other button actions
+        self.selected_name = interaction.data['values'][0]
+        await interaction.response.defer()
+    
+    async def refresh_view(self, interaction: discord.Interaction):
+        """Refresh the view to show updated lorebook list"""
+        try:
+            # Update components with current state
+            self.update_components()
+            
+            # Update the original message
+            lorebooks = self.config_manager.get_lorebooks()
+            embed = discord.Embed(
+                title="📚 Lorebook Management",
+                description="Manage your lorebooks interactively below.",
+                color=discord.Color.purple()
+            )
+            
+            if lorebooks:
+                # Calculate statistics
+                active_count = sum(1 for lb in lorebooks if lb.get("active", False))
+                inactive_count = len(lorebooks) - active_count
+                total_entries = sum(len(lb.get("entries", [])) for lb in lorebooks)
+                
+                # Display statistics in code block
+                stats = f"```\n"
+                stats += f"📊 Statistics\n"
+                stats += f"Total Lorebooks:  {len(lorebooks)}\n"
+                stats += f"🟢 Active:        {active_count}\n"
+                stats += f"🔴 Inactive:      {inactive_count}\n"
+                stats += f"📝 Total Entries: {total_entries}\n"
+                stats += f"```"
+                embed.add_field(name="Overview", value=stats, inline=False)
+                
+                # Show currently selected item if any
+                if self.selected_name:
+                    selected_lb = self.config_manager.get_lorebook_by_name(self.selected_name)
+                    if selected_lb:
+                        status_icon = "🟢" if selected_lb.get("active", False) else "🔴"
+                        entry_count = len(selected_lb.get("entries", []))
+                        selected_info = f"{status_icon} **{self.selected_name}**\n"
+                        selected_info += f"Status: {'Active' if selected_lb.get('active', False) else 'Inactive'}\n"
+                        selected_info += f"Entries: {entry_count}"
+                        embed.add_field(name="Currently Selected", value=selected_info, inline=False)
+                
+                # Add helpful footer
+                embed.set_footer(text="💡 Tip: Select a lorebook from the dropdown to manage it")
+            else:
+                embed.add_field(
+                    name="No Lorebooks",
+                    value="Click 'Create Lorebook' to get started!",
+                    inline=False
+                )
+                embed.set_footer(text="💡 Tip: Create your first lorebook to begin")
+            
+            if self.message:
+                await self.message.edit(embed=embed, view=self)
+        except Exception as e:
+            print(f"Error refreshing view: {str(e)}")
+    
+    async def create_lorebook(self, interaction: discord.Interaction):
+        """Open modal to create a new lorebook"""
+        modal = CreateLorebookModal(self.config_manager, parent_view=self)
+        await interaction.response.send_modal(modal)
+    
+    async def toggle_lorebook(self, interaction: discord.Interaction):
+        """Toggle the active state of selected lorebook"""
+        if not self.selected_name:
+            await interaction.response.send_message(
+                "⚠️ Please select a lorebook first using the dropdown menu.",
+                ephemeral=True
+            )
+            return
+        
+        try:
+            lorebook = self.config_manager.get_lorebook_by_name(self.selected_name)
+            if lorebook:
+                current_status = lorebook.get('active', False)
+                new_status = not current_status
+                
+                self.config_manager.toggle_lorebook_active(self.selected_name, new_status)
+                
+                status_text = "activated" if new_status else "deactivated"
+                embed = discord.Embed(
+                    title="✅ Lorebook Updated",
+                    description=f"Lorebook '{self.selected_name}' has been {status_text}.",
+                    color=discord.Color.green() if new_status else discord.Color.orange()
+                )
+                
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                # Refresh the view to show updated status
+                await self.refresh_view(interaction)
+            else:
+                await interaction.response.send_message(
+                    "❌ Invalid lorebook selection.",
+                    ephemeral=True
+                )
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error toggling lorebook: {str(e)}",
+                ephemeral=True
+            )
+    
+    async def add_entry(self, interaction: discord.Interaction):
+        """Open modal to add an entry to selected lorebook"""
+        if not self.selected_name:
+            await interaction.response.send_message(
+                "⚠️ Please select a lorebook first using the dropdown menu.",
+                ephemeral=True
+            )
+            return
+        
+        try:
+            lorebook = self.config_manager.get_lorebook_by_name(self.selected_name)
+            if lorebook:
+                modal = AddLorebookEntryModal(self.config_manager, self.selected_name, parent_view=self)
+                await interaction.response.send_modal(modal)
+            else:
+                await interaction.response.send_message(
+                    "❌ Invalid lorebook selection.",
+                    ephemeral=True
+                )
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error opening add entry form: {str(e)}",
+                ephemeral=True
+            )
+    
+    async def edit_entry(self, interaction: discord.Interaction):
+        """Open view to edit entries in selected lorebook"""
+        if not self.selected_name:
+            await interaction.response.send_message(
+                "⚠️ Please select a lorebook first using the dropdown menu.",
+                ephemeral=True
+            )
+            return
+        
+        try:
+            lorebook = self.config_manager.get_lorebook_by_name(self.selected_name)
+            if lorebook:
+                entries = lorebook.get('entries', [])
+                if not entries:
+                    await interaction.response.send_message(
+                        f"⚠️ Lorebook '{self.selected_name}' has no entries to edit.",
+                        ephemeral=True
+                    )
+                    return
+                
+                # Create entry edit view
+                view = EntryEditView(self.config_manager, self.selected_name, parent_view=self)
+                embed = discord.Embed(
+                    title=f"✏️ Edit Entry - {self.selected_name}",
+                    description=f"Select an entry to edit ({len(entries)} total)",
+                    color=discord.Color.blue()
+                )
+                await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+            else:
+                await interaction.response.send_message(
+                    "❌ Invalid lorebook selection.",
+                    ephemeral=True
+                )
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error opening entry editor: {str(e)}",
+                ephemeral=True
+            )
+    
+    async def view_entries(self, interaction: discord.Interaction):
+        """View entries in the selected lorebook"""
+        if not self.selected_name:
+            await interaction.response.send_message(
+                "⚠️ Please select a lorebook first using the dropdown menu.",
+                ephemeral=True
+            )
+            return
+        
+        try:
+            lorebook = self.config_manager.get_lorebook_by_name(self.selected_name)
+            if lorebook:
+                name = lorebook.get('name', 'Unknown')
+                entries = lorebook.get('entries', [])
+                active = lorebook.get('active', False)
+                
+                status = "Active ✅" if active else "Inactive ❌"
+                
+                if not entries:
+                    embed = discord.Embed(
+                        title=f"📚 {name} ({status})",
+                        description="This lorebook has no entries yet.",
+                        color=discord.Color.blue()
+                    )
+                    await interaction.response.send_message(embed=embed, ephemeral=True)
+                    return
+                
+                embed = discord.Embed(
+                    title=f"📚 {name} ({status})",
+                    description=f"Total entries: {len(entries)}",
+                    color=discord.Color.blue()
+                )
+                
+                # Show first 10 entries to avoid hitting embed limits
+                for i, entry in enumerate(entries[:10]):
+                    entry_type = entry.get('insertion_type', 'normal').upper()
+                    content = entry.get('content', '')
+                    keywords = entry.get('keywords', [])
+                    
+                    # Truncate long content
+                    if len(content) > 100:
+                        content = content[:100] + "..."
+                    
+                    field_name = f"Entry {i} [{entry_type}]"
+                    field_value = f"**Content:** {content}"
+                    if entry_type == "NORMAL" and keywords:
+                        field_value += f"\n**Keywords:** {', '.join(keywords[:5])}"
+                    
+                    embed.add_field(name=field_name, value=field_value, inline=False)
+                
+                if len(entries) > 10:
+                    embed.set_footer(text=f"Showing 10 of {len(entries)} entries. Use !lorebook show {name} to see all.")
+                
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+            else:
+                await interaction.response.send_message(
+                    "❌ Invalid lorebook selection.",
+                    ephemeral=True
+                )
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error viewing entries: {str(e)}",
+                ephemeral=True
+            )
+    
+    
+    async def duplicate_lorebook(self, interaction: discord.Interaction):
+        """Duplicate the selected lorebook"""
+        if not self.selected_name:
+            await interaction.response.send_message(
+                "⚠️ Please select a lorebook first using the dropdown menu.",
+                ephemeral=True
+            )
+            return
+        
+        try:
+            lorebook = self.config_manager.get_lorebook_by_name(self.selected_name)
+            if lorebook:
+                # Generate unique name
+                base_name = lorebook.get('name', 'Unknown')
+                new_name = f"{base_name}_copy"
+                counter = 1
+                while self.config_manager.get_lorebook_by_name(new_name):
+                    new_name = f"{base_name}_copy_{counter}"
+                    counter += 1
+                
+                # Create duplicate lorebook (inactive by default)
+                self.config_manager.add_lorebook(new_name, active=False)
+                
+                # Copy all entries
+                entries = lorebook.get('entries', [])
+                for entry in entries:
+                    content = entry.get('content', '')
+                    entry_type = entry.get('insertion_type', 'normal')
+                    keywords = entry.get('keywords', [])
+                    self.config_manager.add_lorebook_entry(new_name, content, entry_type, keywords)
+                
+                embed = discord.Embed(
+                    title="✅ Lorebook Duplicated",
+                    description=f"Successfully duplicated lorebook",
+                    color=discord.Color.green()
+                )
+                embed.add_field(name="Original", value=base_name, inline=True)
+                embed.add_field(name="Duplicate", value=new_name, inline=True)
+                embed.add_field(name="Entries Copied", value=str(len(entries)), inline=True)
+                embed.set_footer(text="The duplicate is inactive by default")
+                
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                # Refresh the view to show the new duplicate
+                await self.refresh_view(interaction)
+            else:
+                await interaction.response.send_message(
+                    "❌ Invalid lorebook selection.",
+                    ephemeral=True
+                )
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error duplicating lorebook: {str(e)}",
+                ephemeral=True
+            )
+    
+    async def delete_lorebook(self, interaction: discord.Interaction):
+        """Delete the selected lorebook (with confirmation)"""
+        if not self.selected_name:
+            await interaction.response.send_message(
+                "⚠️ Please select a lorebook first using the dropdown menu.",
+                ephemeral=True
+            )
+            return
+        
+        try:
+            lorebook = self.config_manager.get_lorebook_by_name(self.selected_name)
+            if lorebook:
+                name = lorebook.get('name', 'Unknown')
+                entry_count = len(lorebook.get('entries', []))
+                
+                # Create confirmation view
+                confirm_view = ConfirmDeleteView(self.config_manager, name, entry_count, parent_view=self)
+                
+                embed = discord.Embed(
+                    title="⚠️ Confirm Deletion",
+                    description=f"Are you sure you want to delete lorebook '{name}' with {entry_count} entries?",
+                    color=discord.Color.red()
+                )
+                embed.set_footer(text="This action cannot be undone!")
+                
+                await interaction.response.send_message(embed=embed, view=confirm_view, ephemeral=True)
+            else:
+                await interaction.response.send_message(
+                    "❌ Invalid lorebook selection.",
+                    ephemeral=True
+                )
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error deleting lorebook: {str(e)}",
+                ephemeral=True
+            )
+    
+    async def toggle_all_lorebooks(self, interaction: discord.Interaction):
+        """Toggle all lorebooks intelligently (Task 8)"""
+        try:
+            lorebooks = self.config_manager.get_lorebooks()
+            if not lorebooks:
+                await interaction.response.send_message(
+                    "⚠️ No lorebooks to toggle.",
+                    ephemeral=True
+                )
+                return
+            
+            # Determine action based on majority
+            active_count = sum(1 for lb in lorebooks if lb.get("active", False))
+            total_count = len(lorebooks)
+            
+            # If less than half are active, activate all; otherwise deactivate all
+            target_state = active_count < (total_count / 2)
+            
+            # Toggle all lorebooks to the target state
+            for lorebook in lorebooks:
+                name = lorebook.get('name', '')
+                if name:
+                    self.config_manager.toggle_lorebook_active(name, target_state)
+            
+            # Prepare success message
+            action = "activated" if target_state else "deactivated"
+            color = discord.Color.green() if target_state else discord.Color.orange()
+            
+            embed = discord.Embed(
+                title=f"✅ Bulk Toggle Complete",
+                description=f"Successfully {action} all {total_count} lorebooks.",
+                color=color
+            )
+            embed.add_field(name="Action Taken", value=action.capitalize(), inline=True)
+            embed.add_field(name="Lorebooks Affected", value=str(total_count), inline=True)
+            
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            # Refresh the view to show new states
+            await self.refresh_view(interaction)
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error toggling all lorebooks: {str(e)}",
+                ephemeral=True
+            )
+    
+    async def export_lorebook(self, interaction: discord.Interaction):
+        """Export the selected lorebook as JSON (Task 9)"""
+        if not self.selected_name:
+            await interaction.response.send_message(
+                "⚠️ Please select a lorebook first using the dropdown menu.",
+                ephemeral=True
+            )
+            return
+        
+        try:
+            lorebook = self.config_manager.get_lorebook_by_name(self.selected_name)
+            if lorebook:
+                import json
+                import io
+                
+                # Export lorebook as pretty-printed JSON
+                json_str = json.dumps(lorebook, indent=2, ensure_ascii=False)
+                
+                # Create a discord.File object from JSON string
+                filename = f"{self.selected_name}_export.json"
+                file = discord.File(
+                    io.BytesIO(json_str.encode('utf-8')),
+                    filename=filename
+                )
+                
+                # Create success embed
+                embed = discord.Embed(
+                    title="📤 Lorebook Exported",
+                    description=f"Successfully exported lorebook '{self.selected_name}'",
+                    color=discord.Color.green()
+                )
+                embed.add_field(name="Lorebook", value=self.selected_name, inline=True)
+                embed.add_field(name="Filename", value=filename, inline=True)
+                embed.add_field(name="Entries", value=str(len(lorebook.get('entries', []))), inline=True)
+                embed.set_footer(text="💾 Save this file to backup or share your lorebook")
+                
+                # Send file as ephemeral attachment with success embed
+                await interaction.response.send_message(embed=embed, file=file, ephemeral=True)
+            else:
+                await interaction.response.send_message(
+                    "❌ Invalid lorebook selection.",
+                    ephemeral=True
+                )
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error exporting lorebook: {str(e)}",
+                ephemeral=True
+            )
+    
+    async def search_lorebooks(self, interaction: discord.Interaction):
+        """Open search modal for lorebooks"""
+        modal = SearchLorebookModal(self.config_manager)
+        await interaction.response.send_modal(modal)
+    
+    async def show_help(self, interaction: discord.Interaction):
+        """Show help information for lorebook management"""
+        embed = discord.Embed(
+            title="ℹ️ Lorebook Management Help",
+            description="Learn how to use the lorebook management interface",
+            color=discord.Color.blue()
+        )
+        
+        embed.add_field(
+            name="➕ Create Lorebook",
+            value="Creates a new lorebook. Enter a unique name when prompted.",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="🔄 Toggle Active/Inactive",
+            value="Toggles the active state of the selected lorebook. Active lorebooks are used in conversations.",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="📝 Add Entry",
+            value="Add a new entry to the selected lorebook. Choose 'constant' for always-active entries, or 'normal' for keyword-triggered entries.",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="👁️ View Entries",
+            value="View all entries in the selected lorebook with their types and keywords.",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="📋 Duplicate",
+            value="Create a copy of the selected lorebook with all its entries. The copy will be inactive by default.",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="🔄 Toggle All",
+            value="Intelligently toggles all lorebooks at once. If most are inactive, activates all. If most are active, deactivates all.",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="📤 Export",
+            value="Export the selected lorebook as a JSON file. Use this to back up or share individual lorebooks.",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="🗑️ Delete Lorebook",
+            value="⚠️ WARNING: Permanently deletes the selected lorebook and all its entries. This action cannot be undone!",
+            inline=False
+        )
+        
+        embed.set_footer(text="💡 Best Practice: Always back up your config.json before making major changes")
+        
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+    
+    async def close(self, interaction: discord.Interaction):
+        """Close the management view"""
+        await interaction.response.send_message("Lorebook management closed.", ephemeral=True)
+        self.stop()
+
+
+class ConfirmDeleteView(discord.ui.View):
+    """Confirmation view for deleting a lorebook"""
+    
+    def __init__(self, config_manager: ConfigManager, name: str, entry_count: int, parent_view=None, timeout=30):
+        super().__init__(timeout=timeout)
+        self.config_manager = config_manager
+        self.name = name
+        self.entry_count = entry_count
+        self.parent_view = parent_view
+    
+    @discord.ui.button(label="✅ Yes, Delete", style=discord.ButtonStyle.danger)
+    async def confirm_delete(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Confirm deletion"""
+        try:
+            # Get index by name to delete
+            index = self.config_manager.get_lorebook_index_by_name(self.name)
+            if index is not None:
+                self.config_manager.delete_lorebook(index)
+                
+                embed = discord.Embed(
+                    title="✅ Lorebook Deleted",
+                    description=f"Lorebook '{self.name}' with {self.entry_count} entries has been deleted.",
+                    color=discord.Color.green()
+                )
+                
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                
+                # Refresh parent view if provided
+                if self.parent_view:
+                    # Clear selection since the lorebook was deleted
+                    self.parent_view.selected_name = None
+                    await self.parent_view.refresh_view(interaction)
+                
+                self.stop()
+            else:
+                await interaction.response.send_message(
+                    f"❌ Error: Lorebook '{self.name}' not found.",
+                    ephemeral=True
+                )
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error deleting lorebook: {str(e)}",
+                ephemeral=True
+            )
+    
+    @discord.ui.button(label="❌ Cancel", style=discord.ButtonStyle.secondary)
+    async def cancel_delete(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Cancel deletion"""
+        await interaction.response.send_message("Deletion cancelled.", ephemeral=True)
+        self.stop()
+
+
+class CreateCharacterModal(discord.ui.Modal, title="Create New AI Character"):
+    """Modal for creating a new AI character"""
+    
+    def __init__(self, config_manager: ConfigManager, parent_view=None):
+        super().__init__()
+        self.config_manager = config_manager
+        self.parent_view = parent_view
+        
+        self.name = discord.ui.TextInput(
+            label="Character Name (internal)",
+            placeholder="assistant, narrator, etc.",
+            required=True,
+            max_length=50
+        )
+        self.add_item(self.name)
+        
+        self.display_name = discord.ui.TextInput(
+            label="Display Name",
+            placeholder="The name shown in Discord",
+            required=True,
+            max_length=50
+        )
+        self.add_item(self.display_name)
+        
+        self.description = discord.ui.TextInput(
+            label="System Prompt/Description",
+            placeholder="You are a helpful assistant...",
+            required=True,
+            max_length=2000,
+            style=discord.TextStyle.paragraph
+        )
+        self.add_item(self.description)
+        
+        self.avatar_url = discord.ui.TextInput(
+            label="Avatar URL (optional)",
+            placeholder="https://example.com/avatar.png",
+            required=False,
+            max_length=200
+        )
+        self.add_item(self.avatar_url)
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        """Handle form submission"""
+        try:
+            name = self.name.value.strip()
+            display_name = self.display_name.value.strip()
+            description = self.description.value.strip()
+            avatar_url = self.avatar_url.value.strip() if self.avatar_url.value else ""
+            
+            # Check if character already exists
+            if self.config_manager.get_character_by_name(name):
+                await interaction.response.send_message(
+                    f"❌ Error: Character '{name}' already exists.",
+                    ephemeral=True
+                )
+                return
+            
+            # Create the character
+            self.config_manager.add_character(name, display_name, description, avatar_url=avatar_url)
+            
+            embed = discord.Embed(
+                title="✅ Character Created",
+                description=f"AI Character '{display_name}' has been created.",
+                color=discord.Color.green()
+            )
+            embed.add_field(name="Internal Name", value=name, inline=True)
+            embed.add_field(name="Display Name", value=display_name, inline=True)
+            embed.add_field(name="Description", value=description[:100] + "..." if len(description) > 100 else description, inline=False)
+            if avatar_url:
+                embed.add_field(name="Avatar URL", value=avatar_url, inline=False)
+            
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            
+            # Refresh parent view if provided
+            if self.parent_view:
+                await self.parent_view.refresh_view(interaction)
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error creating character: {str(e)}",
+                ephemeral=True
+            )
+
+
+class CreateUserCharacterModal(discord.ui.Modal, title="Create User Character"):
+    """Modal for creating a user character"""
+    
+    def __init__(self, config_manager: ConfigManager, parent_view=None):
+        super().__init__()
+        self.config_manager = config_manager
+        self.parent_view = parent_view
+        
+        self.name = discord.ui.TextInput(
+            label="Character Name (internal)",
+            placeholder="john, alice, etc.",
+            required=True,
+            max_length=50
+        )
+        self.add_item(self.name)
+        
+        self.display_name = discord.ui.TextInput(
+            label="Display Name",
+            placeholder="The name shown in Discord",
+            required=True,
+            max_length=50
+        )
+        self.add_item(self.display_name)
+        
+        self.description = discord.ui.TextInput(
+            label="Character Description",
+            placeholder="A brave knight from the northern kingdom...",
+            required=True,
+            max_length=2000,
+            style=discord.TextStyle.paragraph
+        )
+        self.add_item(self.description)
+        
+        self.avatar_url = discord.ui.TextInput(
+            label="Avatar URL (optional)",
+            placeholder="https://example.com/avatar.png",
+            required=False,
+            max_length=200
+        )
+        self.add_item(self.avatar_url)
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        """Handle form submission"""
+        try:
+            name = self.name.value.strip()
+            display_name = self.display_name.value.strip()
+            description = self.description.value.strip()
+            avatar_url = self.avatar_url.value.strip() if self.avatar_url.value else ""
+            
+            # Check if character already exists
+            if self.config_manager.get_user_character_by_name(name):
+                await interaction.response.send_message(
+                    f"❌ Error: User character '{name}' already exists.",
+                    ephemeral=True
+                )
+                return
+            
+            # Create the user character
+            self.config_manager.add_user_character(name, display_name, description, avatar_url=avatar_url)
+            
+            embed = discord.Embed(
+                title="✅ User Character Created",
+                description=f"User Character '{display_name}' has been created.",
+                color=discord.Color.green()
+            )
+            embed.add_field(name="Internal Name", value=name, inline=True)
+            embed.add_field(name="Display Name", value=display_name, inline=True)
+            embed.add_field(name="Description", value=description[:100] + "..." if len(description) > 100 else description, inline=False)
+            if avatar_url:
+                embed.add_field(name="Avatar URL", value=avatar_url, inline=False)
+            
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            
+            # Refresh parent view if provided
+            if self.parent_view:
+                await self.parent_view.refresh_view(interaction)
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error creating user character: {str(e)}",
+                ephemeral=True
+            )
+
+
+class CharacterManagementView(discord.ui.View):
+    """Interactive view for managing AI characters"""
+    
+    def __init__(self, config_manager: ConfigManager, timeout=180):
+        super().__init__(timeout=timeout)
+        self.config_manager = config_manager
+        self.selected_name = None
+        self.message = None
+        self.page = 0
+        self.items_per_page = 20
+        self.update_components()
+    
+    def update_components(self):
+        """Update the select menu with current characters"""
+        self.clear_items()
+        
+        characters = self.config_manager.get_characters()
+        
+        if characters:
+            # Calculate pagination
+            start = self.page * self.items_per_page
+            end = start + self.items_per_page
+            paginated_characters = characters[start:end]
+            total_pages = (len(characters) + self.items_per_page - 1) // self.items_per_page
+            
+            # Add character select menu (Row 0)
+            options = []
+            for char in paginated_characters:
+                display_name = char.get('display_name', char.get('name', 'Unknown'))
+                name = char.get('name', 'N/A')
+                description = char.get('description', '')[:50]
+                options.append(
+                    discord.SelectOption(
+                        label=f"{display_name}",
+                        value=name,
+                        description=description if description else name
+                    )
+                )
+            
+            select = discord.ui.Select(
+                placeholder=f"Select a character (Page {self.page + 1}/{total_pages})",
+                options=options,
+                row=0
+            )
+            select.callback = self.character_selected
+            self.add_item(select)
+        
+        # Row 1: Primary Actions (max 4 buttons)
+        create_btn = discord.ui.Button(label="➕ Create Character", style=discord.ButtonStyle.success, row=1)
+        create_btn.callback = self.create_character
+        self.add_item(create_btn)
+        
+        if characters:
+            view_btn = discord.ui.Button(label="👁️ View Details", style=discord.ButtonStyle.primary, row=1)
+            view_btn.callback = self.view_character
+            self.add_item(view_btn)
+            
+            duplicate_btn = discord.ui.Button(label="📋 Duplicate", style=discord.ButtonStyle.secondary, row=1)
+            duplicate_btn.callback = self.duplicate_character
+            self.add_item(duplicate_btn)
+            
+            delete_btn = discord.ui.Button(label="🗑️ Delete Character", style=discord.ButtonStyle.danger, row=1)
+            delete_btn.callback = self.delete_character
+            self.add_item(delete_btn)
+        
+        # Row 2: Utility Actions (max 2 buttons)
+        if characters:
+            export_btn = discord.ui.Button(label="📤 Export", style=discord.ButtonStyle.secondary, row=2)
+            export_btn.callback = self.export_character
+            self.add_item(export_btn)
+        
+        search_btn = discord.ui.Button(label="🔍 Search", style=discord.ButtonStyle.secondary, row=2)
+        search_btn.callback = self.search_characters
+        self.add_item(search_btn)
+        
+        # Row 3: Navigation & Help (max 4 buttons in worst case)
+        # Add pagination buttons if needed
+        total_pages = (len(characters) + self.items_per_page - 1) // self.items_per_page if characters else 1
+        if total_pages > 1:
+            if self.page > 0:
+                prev_btn = discord.ui.Button(label="◀️ Previous", style=discord.ButtonStyle.secondary, row=3)
+                prev_btn.callback = self.previous_page
+                self.add_item(prev_btn)
+            
+            if self.page < total_pages - 1:
+                next_btn = discord.ui.Button(label="Next ▶️", style=discord.ButtonStyle.secondary, row=3)
+                next_btn.callback = self.next_page
+                self.add_item(next_btn)
+        
+        help_btn = discord.ui.Button(label="ℹ️ Help", style=discord.ButtonStyle.secondary, row=3)
+        help_btn.callback = self.show_help
+        self.add_item(help_btn)
+        
+        close_btn = discord.ui.Button(label="❌ Close", style=discord.ButtonStyle.secondary, row=3)
+        close_btn.callback = self.close
+        self.add_item(close_btn)
+    
+    async def previous_page(self, interaction: discord.Interaction):
+        """Navigate to previous page"""
+        if self.page > 0:
+            self.page -= 1
+            await self.refresh_view(interaction)
+            await interaction.response.defer()
+    
+    async def next_page(self, interaction: discord.Interaction):
+        """Navigate to next page"""
+        characters = self.config_manager.get_characters()
+        total_pages = (len(characters) + self.items_per_page - 1) // self.items_per_page
+        if self.page < total_pages - 1:
+            self.page += 1
+            await self.refresh_view(interaction)
+            await interaction.response.defer()
+    
+    async def character_selected(self, interaction: discord.Interaction):
+        """Handle character selection"""
+        self.selected_name = interaction.data['values'][0]
+        await interaction.response.defer()
+    
+    async def refresh_view(self, interaction: discord.Interaction):
+        """Refresh the view to show updated character list"""
+        try:
+            # Update components with current state
+            self.update_components()
+            
+            # Update the original message
+            characters = self.config_manager.get_characters()
+            embed = discord.Embed(
+                title="🤖 AI Character Management",
+                description="Manage your AI characters interactively below.",
+                color=discord.Color.purple()
+            )
+            
+            if characters:
+                # Display statistics in code block
+                stats = f"```\n"
+                stats += f"📊 Statistics\n"
+                stats += f"Total Characters: {len(characters)}\n"
+                stats += f"```"
+                embed.add_field(name="Overview", value=stats, inline=False)
+                
+                # Show currently selected item if any
+                if self.selected_name:
+                    selected_char = self.config_manager.get_character_by_name(self.selected_name)
+                    if selected_char:
+                        display_name = selected_char.get('display_name', 'Unknown')
+                        description = selected_char.get('description', 'No description')[:100]
+                        selected_info = f"**{display_name}**\n{description}"
+                        if len(selected_char.get('description', '')) > 100:
+                            selected_info += "..."
+                        embed.add_field(name="Currently Selected", value=selected_info, inline=False)
+                
+                # Add helpful footer
+                embed.set_footer(text="💡 Tip: Select a character from the dropdown to manage it")
+            else:
+                embed.add_field(
+                    name="No Characters",
+                    value="Click 'Create Character' to get started!",
+                    inline=False
+                )
+                embed.set_footer(text="💡 Tip: Create your first character to begin")
+            
+            if self.message:
+                await self.message.edit(embed=embed, view=self)
+        except Exception as e:
+            print(f"Error refreshing view: {str(e)}")
+    
+    async def create_character(self, interaction: discord.Interaction):
+        """Open modal to create a new character"""
+        modal = CreateCharacterModal(self.config_manager, parent_view=self)
+        await interaction.response.send_modal(modal)
+    
+    async def view_character(self, interaction: discord.Interaction):
+        """View details of selected character"""
+        if not self.selected_name:
+            await interaction.response.send_message(
+                "⚠️ Please select a character first using the dropdown menu.",
+                ephemeral=True
+            )
+            return
+        
+        try:
+            char = self.config_manager.get_character_by_name(self.selected_name)
+            if char:
+                embed = discord.Embed(
+                    title=f"🤖 {char.get('display_name', 'Unknown')}",
+                    description=char.get('description', 'No description'),
+                    color=discord.Color.blue()
+                )
+                embed.add_field(name="Internal Name", value=char.get('name', 'N/A'), inline=True)
+                embed.add_field(name="Display Name", value=char.get('display_name', 'N/A'), inline=True)
+                
+                if char.get('scenario'):
+                    embed.add_field(name="Scenario", value=char.get('scenario')[:200], inline=False)
+                
+                # Avatar preview with placeholder
+                avatar_url = char.get('avatar_url', '')
+                if avatar_url:
+                    embed.add_field(name="Avatar", value=f"[View Full Size]({avatar_url})", inline=False)
+                    embed.set_thumbnail(url=avatar_url)
+                else:
+                    placeholder_url = "https://via.placeholder.com/150?text=No+Avatar"
+                    embed.add_field(name="Avatar", value="No avatar set", inline=False)
+                    embed.set_thumbnail(url=placeholder_url)
+                
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+            else:
+                await interaction.response.send_message(
+                    "❌ Invalid character selection.",
+                    ephemeral=True
+                )
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error viewing character: {str(e)}",
+                ephemeral=True
+            )
+    
+    async def duplicate_character(self, interaction: discord.Interaction):
+        """Duplicate the selected character"""
+        if not self.selected_name:
+            await interaction.response.send_message(
+                "⚠️ Please select a character first using the dropdown menu.",
+                ephemeral=True
+            )
+            return
+        
+        try:
+            char = self.config_manager.get_character_by_name(self.selected_name)
+            if char:
+                # Generate unique name
+                base_name = char.get('name', 'Unknown')
+                new_name = f"{base_name}_copy"
+                counter = 1
+                while self.config_manager.get_character_by_name(new_name):
+                    new_name = f"{base_name}_copy_{counter}"
+                    counter += 1
+                
+                # Create duplicate character
+                display_name = char.get('display_name', base_name) + " (Copy)"
+                description = char.get('description', '')
+                avatar_url = char.get('avatar_url', '')
+                avatar_file = char.get('avatar_file', '')
+                scenario = char.get('scenario', '')
+                
+                self.config_manager.add_character(
+                    new_name, display_name, description,
+                    avatar_url=avatar_url, avatar_file=avatar_file, scenario=scenario
+                )
+                
+                embed = discord.Embed(
+                    title="✅ Character Duplicated",
+                    description=f"Successfully duplicated character",
+                    color=discord.Color.green()
+                )
+                embed.add_field(name="Original", value=base_name, inline=True)
+                embed.add_field(name="Duplicate", value=new_name, inline=True)
+                
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                # Refresh the view to show the new duplicate
+                await self.refresh_view(interaction)
+            else:
+                await interaction.response.send_message(
+                    "❌ Invalid character selection.",
+                    ephemeral=True
+                )
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error duplicating character: {str(e)}",
+                ephemeral=True
+            )
+    
+    async def delete_character(self, interaction: discord.Interaction):
+        """Delete the selected character (with confirmation)"""
+        if not self.selected_name:
+            await interaction.response.send_message(
+                "⚠️ Please select a character first using the dropdown menu.",
+                ephemeral=True
+            )
+            return
+        
+        try:
+            char = self.config_manager.get_character_by_name(self.selected_name)
+            if char:
+                name = char.get('display_name', char.get('name', 'Unknown'))
+                
+                # Create confirmation view
+                confirm_view = ConfirmCharacterDeleteView(self.config_manager, self.selected_name, name, parent_view=self)
+                
+                embed = discord.Embed(
+                    title="⚠️ Confirm Deletion",
+                    description=f"Are you sure you want to delete character '{name}'?",
+                    color=discord.Color.red()
+                )
+                embed.set_footer(text="This action cannot be undone!")
+                
+                await interaction.response.send_message(embed=embed, view=confirm_view, ephemeral=True)
+            else:
+                await interaction.response.send_message(
+                    "❌ Invalid character selection.",
+                    ephemeral=True
+                )
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error deleting character: {str(e)}",
+                ephemeral=True
+            )
+    
+    async def export_character(self, interaction: discord.Interaction):
+        """Export the selected character as JSON (Task 9)"""
+        if not self.selected_name:
+            await interaction.response.send_message(
+                "⚠️ Please select a character first using the dropdown menu.",
+                ephemeral=True
+            )
+            return
+        
+        try:
+            character = self.config_manager.get_character_by_name(self.selected_name)
+            if character:
+                import json
+                import io
+                
+                # Export character as pretty-printed JSON
+                json_str = json.dumps(character, indent=2, ensure_ascii=False)
+                
+                # Create a discord.File object from JSON string
+                filename = f"{self.selected_name}_export.json"
+                file = discord.File(
+                    io.BytesIO(json_str.encode('utf-8')),
+                    filename=filename
+                )
+                
+                # Create success embed
+                embed = discord.Embed(
+                    title="📤 Character Exported",
+                    description=f"Successfully exported character '{self.selected_name}'",
+                    color=discord.Color.green()
+                )
+                display_name = character.get('display_name', self.selected_name)
+                embed.add_field(name="Character", value=display_name, inline=True)
+                embed.add_field(name="Filename", value=filename, inline=True)
+                embed.set_footer(text="💾 Save this file to backup or share your character")
+                
+                # Send file as ephemeral attachment with success embed
+                await interaction.response.send_message(embed=embed, file=file, ephemeral=True)
+            else:
+                await interaction.response.send_message(
+                    "❌ Invalid character selection.",
+                    ephemeral=True
+                )
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error exporting character: {str(e)}",
+                ephemeral=True
+            )
+    
+    async def search_characters(self, interaction: discord.Interaction):
+        """Open search modal for AI characters"""
+        modal = SearchCharacterModal(self.config_manager)
+        await interaction.response.send_modal(modal)
+    
+    async def show_help(self, interaction: discord.Interaction):
+        """Show help information for AI character management"""
+        embed = discord.Embed(
+            title="ℹ️ AI Character Management Help",
+            description="Learn how to use the AI character management interface",
+            color=discord.Color.blue()
+        )
+        
+        embed.add_field(
+            name="➕ Create Character",
+            value="Creates a new AI character. Provide an internal name, display name, system prompt, and optional avatar URL.",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="👁️ View Details",
+            value="View full details of the selected character including system prompt and avatar.",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="📋 Duplicate",
+            value="Create a copy of the selected character with all its properties. Useful for creating variations.",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="📤 Export",
+            value="Export the selected character as a JSON file. Use this to back up or share individual characters.",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="🗑️ Delete Character",
+            value="⚠️ WARNING: Permanently deletes the selected character. This action cannot be undone!",
+            inline=False
+        )
+        
+        embed.set_footer(text="💡 Best Practice: Always back up your config.json before making major changes")
+        
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+    
+    async def close(self, interaction: discord.Interaction):
+        """Close the management view"""
+        await interaction.response.send_message("Character management closed.", ephemeral=True)
+        self.stop()
+
+
+class UserCharacterManagementView(discord.ui.View):
+    """Interactive view for managing user characters"""
+    
+    def __init__(self, config_manager: ConfigManager, timeout=180):
+        super().__init__(timeout=timeout)
+        self.config_manager = config_manager
+        self.selected_name = None
+        self.message = None
+        self.page = 0
+        self.items_per_page = 20
+        self.update_components()
+    
+    def update_components(self):
+        """Update the select menu with current user characters"""
+        self.clear_items()
+        
+        characters = self.config_manager.get_user_characters()
+        
+        if characters:
+            # Calculate pagination
+            start = self.page * self.items_per_page
+            end = start + self.items_per_page
+            paginated_characters = characters[start:end]
+            total_pages = (len(characters) + self.items_per_page - 1) // self.items_per_page
+            
+            # Add character select menu
+            options = []
+            for char in paginated_characters:
+                display_name = char.get('display_name', char.get('name', 'Unknown'))
+                name = char.get('name', 'N/A')
+                description = char.get('description', '')[:50]
+                options.append(
+                    discord.SelectOption(
+                        label=f"{display_name}",
+                        value=name,
+                        description=description if description else name
+                    )
+                )
+            
+            select = discord.ui.Select(
+                placeholder=f"Select a user character (Page {self.page + 1}/{total_pages})",
+                options=options,
+                row=0
+            )
+            select.callback = self.character_selected
+            self.add_item(select)
+        
+        # Add management buttons
+        create_btn = discord.ui.Button(label="➕ Create User Character", style=discord.ButtonStyle.success, row=1)
+        create_btn.callback = self.create_character
+        self.add_item(create_btn)
+        
+        if characters:
+            view_btn = discord.ui.Button(label="👁️ View Details", style=discord.ButtonStyle.primary, row=1)
+            view_btn.callback = self.view_character
+            self.add_item(view_btn)
+            
+            delete_btn = discord.ui.Button(label="🗑️ Delete Character", style=discord.ButtonStyle.danger, row=1)
+            delete_btn.callback = self.delete_character
+            self.add_item(delete_btn)
+        
+        # Add search button
+        search_btn = discord.ui.Button(label="🔍 Search", style=discord.ButtonStyle.secondary, row=2)
+        search_btn.callback = self.search_user_characters
+        self.add_item(search_btn)
+        
+        # Add help button
+        help_btn = discord.ui.Button(label="ℹ️ Help", style=discord.ButtonStyle.secondary, row=2)
+        help_btn.callback = self.show_help
+        self.add_item(help_btn)
+        
+        # Add pagination buttons if needed
+        total_pages = (len(characters) + self.items_per_page - 1) // self.items_per_page if characters else 1
+        if total_pages > 1:
+            if self.page > 0:
+                prev_btn = discord.ui.Button(label="◀️ Previous", style=discord.ButtonStyle.secondary, row=2)
+                prev_btn.callback = self.previous_page
+                self.add_item(prev_btn)
+            
+            if self.page < total_pages - 1:
+                next_btn = discord.ui.Button(label="Next ▶️", style=discord.ButtonStyle.secondary, row=2)
+                next_btn.callback = self.next_page
+                self.add_item(next_btn)
+        
+        close_btn = discord.ui.Button(label="❌ Close", style=discord.ButtonStyle.secondary, row=2)
+        close_btn.callback = self.close
+        self.add_item(close_btn)
+    
+    async def previous_page(self, interaction: discord.Interaction):
+        """Navigate to previous page"""
+        if self.page > 0:
+            self.page -= 1
+            await self.refresh_view(interaction)
+            await interaction.response.defer()
+    
+    async def next_page(self, interaction: discord.Interaction):
+        """Navigate to next page"""
+        characters = self.config_manager.get_user_characters()
+        total_pages = (len(characters) + self.items_per_page - 1) // self.items_per_page
+        if self.page < total_pages - 1:
+            self.page += 1
+            await self.refresh_view(interaction)
+            await interaction.response.defer()
+    
+    async def character_selected(self, interaction: discord.Interaction):
+        """Handle character selection"""
+        self.selected_name = interaction.data['values'][0]
+        await interaction.response.defer()
+    
+    async def refresh_view(self, interaction: discord.Interaction):
+        """Refresh the view to show updated user character list"""
+        try:
+            # Update components with current state
+            self.update_components()
+            
+            # Update the original message
+            characters = self.config_manager.get_user_characters()
+            embed = discord.Embed(
+                title="👥 User Character Management",
+                description="Manage your user/player characters interactively below.",
+                color=discord.Color.purple()
+            )
+            
+            if characters:
+                # Display statistics in code block
+                stats = f"```\n"
+                stats += f"📊 Statistics\n"
+                stats += f"Total User Characters: {len(characters)}\n"
+                stats += f"```"
+                embed.add_field(name="Overview", value=stats, inline=False)
+                
+                # Show currently selected item if any
+                if self.selected_name:
+                    selected_char = self.config_manager.get_user_character_by_name(self.selected_name)
+                    if selected_char:
+                        display_name = selected_char.get('display_name', 'Unknown')
+                        description = selected_char.get('description', 'No description')[:100]
+                        selected_info = f"**{display_name}**\n{description}"
+                        if len(selected_char.get('description', '')) > 100:
+                            selected_info += "..."
+                        embed.add_field(name="Currently Selected", value=selected_info, inline=False)
+                
+                # Add helpful footer
+                embed.set_footer(text="💡 Tip: Select a user character from the dropdown to manage it")
+            else:
+                embed.add_field(
+                    name="No User Characters",
+                    value="Click 'Create User Character' to get started!",
+                    inline=False
+                )
+                embed.set_footer(text="💡 Tip: Create your first user character to begin")
+            
+            if self.message:
+                await self.message.edit(embed=embed, view=self)
+        except Exception as e:
+            print(f"Error refreshing view: {str(e)}")
+    
+    async def create_character(self, interaction: discord.Interaction):
+        """Open modal to create a new user character"""
+        modal = CreateUserCharacterModal(self.config_manager, parent_view=self)
+        await interaction.response.send_modal(modal)
+    
+    async def view_character(self, interaction: discord.Interaction):
+        """View details of selected user character"""
+        if not self.selected_name:
+            await interaction.response.send_message(
+                "⚠️ Please select a character first using the dropdown menu.",
+                ephemeral=True
+            )
+            return
+        
+        try:
+            char = self.config_manager.get_user_character_by_name(self.selected_name)
+            if char:
+                embed = discord.Embed(
+                    title=f"👥 {char.get('display_name', 'Unknown')}",
+                    description=char.get('description', 'No description'),
+                    color=discord.Color.green()
+                )
+                embed.add_field(name="Internal Name", value=char.get('name', 'N/A'), inline=True)
+                embed.add_field(name="Display Name", value=char.get('display_name', 'N/A'), inline=True)
+                
+                # Avatar preview with placeholder
+                avatar_url = char.get('avatar_url', '')
+                if avatar_url:
+                    embed.add_field(name="Avatar", value=f"[View Full Size]({avatar_url})", inline=False)
+                    embed.set_thumbnail(url=avatar_url)
+                else:
+                    placeholder_url = "https://via.placeholder.com/150?text=No+Avatar"
+                    embed.add_field(name="Avatar", value="No avatar set", inline=False)
+                    embed.set_thumbnail(url=placeholder_url)
+                
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+            else:
+                await interaction.response.send_message(
+                    "❌ Invalid character selection.",
+                    ephemeral=True
+                )
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error viewing character: {str(e)}",
+                ephemeral=True
+            )
+    
+    async def delete_character(self, interaction: discord.Interaction):
+        """Delete the selected user character (with confirmation)"""
+        if not self.selected_name:
+            await interaction.response.send_message(
+                "⚠️ Please select a character first using the dropdown menu.",
+                ephemeral=True
+            )
+            return
+        
+        try:
+            char = self.config_manager.get_user_character_by_name(self.selected_name)
+            if char:
+                name = char.get('display_name', char.get('name', 'Unknown'))
+                
+                # Create confirmation view
+                confirm_view = ConfirmUserCharacterDeleteView(self.config_manager, self.selected_name, name, parent_view=self)
+                
+                embed = discord.Embed(
+                    title="⚠️ Confirm Deletion",
+                    description=f"Are you sure you want to delete user character '{name}'?",
+                    color=discord.Color.red()
+                )
+                embed.set_footer(text="This action cannot be undone!")
+                
+                await interaction.response.send_message(embed=embed, view=confirm_view, ephemeral=True)
+            else:
+                await interaction.response.send_message(
+                    "❌ Invalid character selection.",
+                    ephemeral=True
+                )
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error deleting character: {str(e)}",
+                ephemeral=True
+            )
+    
+    async def search_user_characters(self, interaction: discord.Interaction):
+        """Open search modal for user characters"""
+        modal = SearchUserCharacterModal(self.config_manager)
+        await interaction.response.send_modal(modal)
+    
+    async def show_help(self, interaction: discord.Interaction):
+        """Show help information for user character management"""
+        embed = discord.Embed(
+            title="ℹ️ User Character Management Help",
+            description="Learn how to use the user/player character management interface",
+            color=discord.Color.blue()
+        )
+        
+        embed.add_field(
+            name="➕ Create User Character",
+            value="Creates a new user/player character. Provide an internal name, display name, description, and optional avatar URL.",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="👁️ View Details",
+            value="View full details of the selected user character including description and avatar.",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="🗑️ Delete Character",
+            value="⚠️ WARNING: Permanently deletes the selected user character. This action cannot be undone!",
+            inline=False
+        )
+        
+        embed.set_footer(text="💡 Best Practice: Always back up your config.json before making major changes")
+        
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+    
+    async def close(self, interaction: discord.Interaction):
+        """Close the management view"""
+        await interaction.response.send_message("User character management closed.", ephemeral=True)
+        self.stop()
+
+
+class ConfirmCharacterDeleteView(discord.ui.View):
+    """Confirmation view for deleting an AI character"""
+    
+    def __init__(self, config_manager: ConfigManager, internal_name: str, display_name: str, parent_view=None, timeout=30):
+        super().__init__(timeout=timeout)
+        self.config_manager = config_manager
+        self.internal_name = internal_name
+        self.display_name = display_name
+        self.parent_view = parent_view
+    
+    @discord.ui.button(label="✅ Yes, Delete", style=discord.ButtonStyle.danger)
+    async def confirm_delete(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Confirm deletion"""
+        try:
+            # Find character by internal name and get its index
+            characters = self.config_manager.get_characters()
+            index = None
+            for i, char in enumerate(characters):
+                if char.get('name') == self.internal_name:
+                    index = i
+                    break
+            
+            if index is not None:
+                self.config_manager.delete_character(index)
+                
+                embed = discord.Embed(
+                    title="✅ Character Deleted",
+                    description=f"Character '{self.display_name}' has been deleted.",
+                    color=discord.Color.green()
+                )
+                
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                
+                # Refresh parent view if provided
+                if self.parent_view:
+                    self.parent_view.selected_name = None
+                    await self.parent_view.refresh_view(interaction)
+                
+                self.stop()
+            else:
+                await interaction.response.send_message(
+                    f"❌ Error: Character '{self.display_name}' not found.",
+                    ephemeral=True
+                )
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error deleting character: {str(e)}",
+                ephemeral=True
+            )
+    
+    @discord.ui.button(label="❌ Cancel", style=discord.ButtonStyle.secondary)
+    async def cancel_delete(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Cancel deletion"""
+        await interaction.response.send_message("Deletion cancelled.", ephemeral=True)
+        self.stop()
+
+
+class ConfirmUserCharacterDeleteView(discord.ui.View):
+    """Confirmation view for deleting a user character"""
+    
+    def __init__(self, config_manager: ConfigManager, internal_name: str, display_name: str, parent_view=None, timeout=30):
+        super().__init__(timeout=timeout)
+        self.config_manager = config_manager
+        self.internal_name = internal_name
+        self.display_name = display_name
+        self.parent_view = parent_view
+    
+    @discord.ui.button(label="✅ Yes, Delete", style=discord.ButtonStyle.danger)
+    async def confirm_delete(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Confirm deletion"""
+        try:
+            # Find character by internal name and get its index
+            characters = self.config_manager.get_user_characters()
+            index = None
+            for i, char in enumerate(characters):
+                if char.get('name') == self.internal_name:
+                    index = i
+                    break
+            
+            if index is not None:
+                self.config_manager.delete_user_character(index)
+                
+                embed = discord.Embed(
+                    title="✅ User Character Deleted",
+                    description=f"User character '{self.display_name}' has been deleted.",
+                    color=discord.Color.green()
+                )
+                
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                
+                # Refresh parent view if provided
+                if self.parent_view:
+                    self.parent_view.selected_name = None
+                    await self.parent_view.refresh_view(interaction)
+                
+                self.stop()
+            else:
+                await interaction.response.send_message(
+                    f"❌ Error: User character '{self.display_name}' not found.",
+                    ephemeral=True
+                )
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error deleting user character: {str(e)}",
+                ephemeral=True
+            )
+    
+    @discord.ui.button(label="❌ Cancel", style=discord.ButtonStyle.secondary)
+    async def cancel_delete(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Cancel deletion"""
+        await interaction.response.send_message("Deletion cancelled.", ephemeral=True)
+        self.stop()
 
 
 class PresetBot(commands.Bot):
