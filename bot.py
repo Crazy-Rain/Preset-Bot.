@@ -1696,6 +1696,18 @@ class LorebookManagementView(discord.ui.View):
             delete_btn.callback = self.delete_lorebook
             self.add_item(delete_btn)
         
+        # Add Task 8: Toggle All button (row 3)
+        if lorebooks:
+            toggle_all_btn = discord.ui.Button(label="🔄 Toggle All", style=discord.ButtonStyle.primary, row=3)
+            toggle_all_btn.callback = self.toggle_all_lorebooks
+            self.add_item(toggle_all_btn)
+        
+        # Add Task 9: Export button (row 3)
+        if lorebooks:
+            export_btn = discord.ui.Button(label="📤 Export", style=discord.ButtonStyle.secondary, row=3)
+            export_btn.callback = self.export_lorebook
+            self.add_item(export_btn)
+        
         # Add search button (row 3)
         search_btn = discord.ui.Button(label="🔍 Search", style=discord.ButtonStyle.secondary, row=3)
         search_btn.callback = self.search_lorebooks
@@ -2066,6 +2078,100 @@ class LorebookManagementView(discord.ui.View):
                 ephemeral=True
             )
     
+    async def toggle_all_lorebooks(self, interaction: discord.Interaction):
+        """Toggle all lorebooks intelligently (Task 8)"""
+        try:
+            lorebooks = self.config_manager.get_lorebooks()
+            if not lorebooks:
+                await interaction.response.send_message(
+                    "⚠️ No lorebooks to toggle.",
+                    ephemeral=True
+                )
+                return
+            
+            # Determine action based on majority
+            active_count = sum(1 for lb in lorebooks if lb.get("active", False))
+            total_count = len(lorebooks)
+            
+            # If less than half are active, activate all; otherwise deactivate all
+            target_state = active_count < (total_count / 2)
+            
+            # Toggle all lorebooks to the target state
+            for lorebook in lorebooks:
+                name = lorebook.get('name', '')
+                if name:
+                    self.config_manager.toggle_lorebook_active(name, target_state)
+            
+            # Prepare success message
+            action = "activated" if target_state else "deactivated"
+            color = discord.Color.green() if target_state else discord.Color.orange()
+            
+            embed = discord.Embed(
+                title=f"✅ Bulk Toggle Complete",
+                description=f"Successfully {action} all {total_count} lorebooks.",
+                color=color
+            )
+            embed.add_field(name="Action Taken", value=action.capitalize(), inline=True)
+            embed.add_field(name="Lorebooks Affected", value=str(total_count), inline=True)
+            
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            # Refresh the view to show new states
+            await self.refresh_view(interaction)
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error toggling all lorebooks: {str(e)}",
+                ephemeral=True
+            )
+    
+    async def export_lorebook(self, interaction: discord.Interaction):
+        """Export the selected lorebook as JSON (Task 9)"""
+        if not self.selected_name:
+            await interaction.response.send_message(
+                "⚠️ Please select a lorebook first using the dropdown menu.",
+                ephemeral=True
+            )
+            return
+        
+        try:
+            lorebook = self.config_manager.get_lorebook_by_name(self.selected_name)
+            if lorebook:
+                import json
+                import io
+                
+                # Export lorebook as pretty-printed JSON
+                json_str = json.dumps(lorebook, indent=2, ensure_ascii=False)
+                
+                # Create a discord.File object from JSON string
+                filename = f"{self.selected_name}_export.json"
+                file = discord.File(
+                    io.BytesIO(json_str.encode('utf-8')),
+                    filename=filename
+                )
+                
+                # Create success embed
+                embed = discord.Embed(
+                    title="📤 Lorebook Exported",
+                    description=f"Successfully exported lorebook '{self.selected_name}'",
+                    color=discord.Color.green()
+                )
+                embed.add_field(name="Lorebook", value=self.selected_name, inline=True)
+                embed.add_field(name="Filename", value=filename, inline=True)
+                embed.add_field(name="Entries", value=str(len(lorebook.get('entries', []))), inline=True)
+                embed.set_footer(text="💾 Save this file to backup or share your lorebook")
+                
+                # Send file as ephemeral attachment with success embed
+                await interaction.response.send_message(embed=embed, file=file, ephemeral=True)
+            else:
+                await interaction.response.send_message(
+                    "❌ Invalid lorebook selection.",
+                    ephemeral=True
+                )
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error exporting lorebook: {str(e)}",
+                ephemeral=True
+            )
+    
     async def search_lorebooks(self, interaction: discord.Interaction):
         """Open search modal for lorebooks"""
         modal = SearchLorebookModal(self.config_manager)
@@ -2106,6 +2212,18 @@ class LorebookManagementView(discord.ui.View):
         embed.add_field(
             name="📋 Duplicate",
             value="Create a copy of the selected lorebook with all its entries. The copy will be inactive by default.",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="🔄 Toggle All",
+            value="Intelligently toggles all lorebooks at once. If most are inactive, activates all. If most are active, deactivates all.",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="📤 Export",
+            value="Export the selected lorebook as a JSON file. Use this to back up or share individual lorebooks.",
             inline=False
         )
         
@@ -2408,6 +2526,12 @@ class CharacterManagementView(discord.ui.View):
             delete_btn.callback = self.delete_character
             self.add_item(delete_btn)
         
+        # Add export button
+        if characters:
+            export_btn = discord.ui.Button(label="📤 Export", style=discord.ButtonStyle.secondary, row=2)
+            export_btn.callback = self.export_character
+            self.add_item(export_btn)
+        
         # Add search button
         search_btn = discord.ui.Button(label="🔍 Search", style=discord.ButtonStyle.secondary, row=2)
         search_btn.callback = self.search_characters
@@ -2644,6 +2768,55 @@ class CharacterManagementView(discord.ui.View):
                 ephemeral=True
             )
     
+    async def export_character(self, interaction: discord.Interaction):
+        """Export the selected character as JSON (Task 9)"""
+        if not self.selected_name:
+            await interaction.response.send_message(
+                "⚠️ Please select a character first using the dropdown menu.",
+                ephemeral=True
+            )
+            return
+        
+        try:
+            character = self.config_manager.get_character_by_name(self.selected_name)
+            if character:
+                import json
+                import io
+                
+                # Export character as pretty-printed JSON
+                json_str = json.dumps(character, indent=2, ensure_ascii=False)
+                
+                # Create a discord.File object from JSON string
+                filename = f"{self.selected_name}_export.json"
+                file = discord.File(
+                    io.BytesIO(json_str.encode('utf-8')),
+                    filename=filename
+                )
+                
+                # Create success embed
+                embed = discord.Embed(
+                    title="📤 Character Exported",
+                    description=f"Successfully exported character '{self.selected_name}'",
+                    color=discord.Color.green()
+                )
+                display_name = character.get('display_name', self.selected_name)
+                embed.add_field(name="Character", value=display_name, inline=True)
+                embed.add_field(name="Filename", value=filename, inline=True)
+                embed.set_footer(text="💾 Save this file to backup or share your character")
+                
+                # Send file as ephemeral attachment with success embed
+                await interaction.response.send_message(embed=embed, file=file, ephemeral=True)
+            else:
+                await interaction.response.send_message(
+                    "❌ Invalid character selection.",
+                    ephemeral=True
+                )
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Error exporting character: {str(e)}",
+                ephemeral=True
+            )
+    
     async def search_characters(self, interaction: discord.Interaction):
         """Open search modal for AI characters"""
         modal = SearchCharacterModal(self.config_manager)
@@ -2672,6 +2845,12 @@ class CharacterManagementView(discord.ui.View):
         embed.add_field(
             name="📋 Duplicate",
             value="Create a copy of the selected character with all its properties. Useful for creating variations.",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="📤 Export",
+            value="Export the selected character as a JSON file. Use this to back up or share individual characters.",
             inline=False
         )
         
