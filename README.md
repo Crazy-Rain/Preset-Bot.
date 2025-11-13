@@ -31,10 +31,11 @@ This is a Discord bot with AI response capabilities and manual send features. Th
 - Supports any OpenAI-compatible endpoint (OpenAI, Azure OpenAI, LocalAI, etc.)
 - Configuration saved to `config.json`
 
-### 2. Interactive Discord Configuration (NEW!)
+### 2. Interactive Discord Configuration (ENHANCED!)
 - `!config` command opens an interactive menu with buttons
 - Configure OpenAI settings through a modal form (Base URL, API Key, Model)
-- View AI characters, user characters, lorebooks, and presets
+- **Full Lorebook Management**: Create, activate/deactivate, add entries, view, and delete lorebooks (NEW!)
+- View AI characters, user characters, and presets
 - View bot settings including reconnection configuration
 - Admin-only access for security
 - No need to stop the bot or open GUI on the host machine

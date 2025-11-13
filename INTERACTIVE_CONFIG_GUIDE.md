@@ -61,10 +61,15 @@ Displays current bot configuration including:
   - Maximum delay between retries
 
 #### 📚 Lorebooks
-Lists all configured lorebooks showing:
-- Lorebook names
-- Active/Inactive status
-- Number of entries in each lorebook
+Opens the **Interactive Lorebook Management** interface with full control over lorebooks:
+- **Select Lorebook**: Dropdown menu to select a lorebook for operations
+- **Create Lorebook**: Create new lorebooks with a unique name
+- **Toggle Active/Inactive**: Enable or disable selected lorebook
+- **Add Entry**: Add new constant or normal entries with keywords
+- **View Entries**: See all entries in the selected lorebook (paginated)
+- **Delete Lorebook**: Remove a lorebook with confirmation dialog
+
+**NEW!** Lorebooks can now be fully managed through Discord without command-line syntax or accessing the host machine.
 
 #### 🎯 Presets
 Shows all AI presets with:
@@ -76,6 +81,43 @@ Shows all AI presets with:
 Closes the configuration menu.
 
 ## Usage Examples
+
+### Managing Lorebooks Interactively (NEW!)
+
+1. Type `!config` in Discord
+2. Click the "📚 Lorebooks" button
+3. You'll see the Lorebook Management interface
+
+**To Create a New Lorebook:**
+- Click "➕ Create Lorebook"
+- Enter a unique name in the modal
+- Click "Submit"
+- The lorebook is created and automatically activated
+
+**To Toggle a Lorebook Active/Inactive:**
+- Select a lorebook from the dropdown menu
+- Click "🔄 Toggle Active/Inactive"
+- The status will be toggled instantly
+
+**To Add an Entry:**
+- Select a lorebook from the dropdown menu
+- Click "📝 Add Entry"
+- Fill in the modal form:
+  - **Entry Content**: The text to inject into conversations
+  - **Entry Type**: Either "constant" (always active) or "normal" (keyword-triggered)
+  - **Keywords**: Comma-separated keywords (only for normal entries)
+- Click "Submit"
+
+**To View Entries:**
+- Select a lorebook from the dropdown menu
+- Click "👁️ View Entries"
+- See all entries with their types, content, and keywords (first 10 shown)
+
+**To Delete a Lorebook:**
+- Select a lorebook from the dropdown menu
+- Click "🗑️ Delete Lorebook"
+- Confirm deletion in the dialog
+- The lorebook and all its entries will be removed
 
 ### Configuring OpenAI Settings
 
@@ -129,34 +171,41 @@ The configuration menu automatically expires after **3 minutes** of inactivity. 
 ## Technical Details
 
 ### View Components
-The configuration system uses two main Discord UI components:
+The configuration system uses multiple Discord UI components:
 
 1. **ConfigMenuView**: A View with buttons for different configuration categories
 2. **OpenAIConfigModal**: A Modal form for inputting OpenAI settings
+3. **LorebookManagementView**: Interactive view for managing lorebooks (NEW!)
+4. **CreateLorebookModal**: Modal form for creating new lorebooks (NEW!)
+5. **AddLorebookEntryModal**: Modal form for adding lorebook entries (NEW!)
+6. **ConfirmDeleteView**: Confirmation dialog for deleting lorebooks (NEW!)
 
 ### Configuration Changes
-- Changes made through the OpenAI Config modal are immediately saved to `config.json`
+- Changes made through modals are immediately saved to `config.json`
 - The bot's AI handler will use the new settings for subsequent requests
 - No bot restart is required
+- Lorebook changes take effect immediately in ongoing conversations
 
 ### Limitations
 
 Current limitations of the interactive configuration system:
 
-1. **View-Only for Some Categories**: Characters, user characters, lorebooks, and presets are currently view-only through the menu
-2. **Full Management Still Requires Commands**: For adding/deleting/editing characters and lorebooks, use the respective commands
-3. **GUI Still Needed for Complex Operations**: Creating presets with multiple message blocks is easier through the GUI
+1. **View-Only for Some Categories**: Characters, user characters, and presets are currently view-only through the menu
+2. **Full Management for Lorebooks**: ✅ Lorebooks can now be fully managed interactively! (NEW!)
+3. **Full Management Still Requires Commands**: For adding/deleting/editing characters, use the respective commands
+4. **GUI Still Needed for Complex Operations**: Creating presets with multiple message blocks is easier through the GUI
 
 ## Future Enhancements
 
 Potential future improvements to the interactive configuration system:
 
-- Add/Edit/Delete characters through modals
+- Add/Edit/Delete AI characters through modals
+- Add/Edit/Delete user characters through modals
 - Preset management with select menus
-- Lorebook entry management
-- User character creation and editing
+- ~~Lorebook entry management~~ ✅ **COMPLETED!**
 - Reconnection settings modification
 - Token management through modal
+- Delete individual lorebook entries interactively
 
 ## Troubleshooting
 
@@ -171,6 +220,20 @@ Potential future improvements to the interactive configuration system:
 ### Configuration Changes Not Applied
 **Problem**: Changes made through the config modal don't seem to take effect.
 **Solution**: Check the bot's console for any error messages. Verify that `config.json` was updated successfully.
+
+### Lorebook Management Issues (NEW!)
+
+**Problem**: "Please select a lorebook first using the dropdown menu."
+**Solution**: Make sure to click on a lorebook in the dropdown menu at the top before using buttons like Toggle, Add Entry, View Entries, or Delete.
+
+**Problem**: Cannot create a lorebook with the same name.
+**Solution**: Lorebook names must be unique. Choose a different name or delete the existing lorebook first.
+
+**Problem**: Keywords not working for normal entries.
+**Solution**: Ensure keywords are comma-separated (e.g., "dragon, dragons, drake"). Keywords are case-insensitive and match partial words.
+
+**Problem**: Entry content is truncated when viewing.
+**Solution**: The view shows truncated content to fit Discord's embed limits. Use `!lorebook show <name>` command to see full content of all entries.
 
 ## Related Commands
 
