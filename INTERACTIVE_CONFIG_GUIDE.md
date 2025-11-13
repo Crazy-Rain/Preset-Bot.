@@ -37,20 +37,22 @@ Opens a modal form to configure OpenAI settings:
 The form pre-fills with your current settings, making it easy to update specific values.
 
 #### 🤖 Characters
-Displays all configured AI characters with their:
-- Display names
-- Internal names
-- Descriptions (truncated to 100 characters)
+Opens the **Interactive AI Character Management** interface with full control over AI characters:
+- **Select Character**: Dropdown menu to select a character for operations
+- **Create Character**: Create new AI characters with system prompts and avatars
+- **View Details**: See full character information including system prompts and avatars
+- **Delete Character**: Remove an AI character with confirmation dialog
 
-This is a view-only button that shows your current character configuration.
+**NEW!** AI characters can now be fully managed through Discord without command-line syntax.
 
 #### 👥 User Characters
-Shows all user/player characters configured in the system with:
-- Display names
-- Internal names
-- Descriptions (truncated to 100 characters)
+Opens the **Interactive User Character Management** interface with full control over user/player characters:
+- **Select Character**: Dropdown menu to select a character for operations
+- **Create User Character**: Create new user/player characters with descriptions and avatars
+- **View Details**: See full character information including descriptions and avatars
+- **Delete Character**: Remove a user character with confirmation dialog
 
-Useful for seeing which user characters are available for role-playing.
+**NEW!** User characters can now be fully managed through Discord without command-line syntax.
 
 #### ⚙️ Bot Settings
 Displays current bot configuration including:
@@ -144,6 +146,51 @@ Closes the configuration menu.
 3. Review the current reconnection configuration
 4. The settings are displayed in an easy-to-read embed
 
+### Managing AI Characters Interactively (NEW!)
+
+1. Type `!config` in Discord
+2. Click the "🤖 Characters" button
+3. You'll see the AI Character Management interface
+
+**To Create a New AI Character:**
+- Click "➕ Create Character"
+- Fill in the modal form:
+  - **Character Name**: Internal identifier (e.g., "assistant", "narrator")
+  - **Display Name**: Name shown in Discord
+  - **System Prompt/Description**: The AI's personality and behavior instructions
+  - **Avatar URL**: Optional image URL for the character
+- Click "Submit"
+- The character is created instantly
+
+**To View Character Details:**
+- Select a character from the dropdown menu
+- Click "👁️ View Details"
+- See full information including system prompt and avatar
+
+**To Delete a Character:**
+- Select a character from the dropdown menu
+- Click "🗑️ Delete Character"
+- Confirm deletion in the dialog
+
+### Managing User Characters Interactively (NEW!)
+
+1. Type `!config` in Discord
+2. Click the "👥 User Characters" button
+3. You'll see the User Character Management interface
+
+**To Create a New User Character:**
+- Click "➕ Create User Character"
+- Fill in the modal form:
+  - **Character Name**: Internal identifier (e.g., "john", "alice")
+  - **Display Name**: Name shown in Discord
+  - **Character Description**: Background and personality of the character
+  - **Avatar URL**: Optional image URL for the character
+- Click "Submit"
+- The character is created instantly
+
+**To View/Delete User Characters:**
+- Same workflow as AI characters using the dropdown menu and buttons
+
 ## Security Features
 
 ### Administrator-Only Access
@@ -179,33 +226,42 @@ The configuration system uses multiple Discord UI components:
 4. **CreateLorebookModal**: Modal form for creating new lorebooks (NEW!)
 5. **AddLorebookEntryModal**: Modal form for adding lorebook entries (NEW!)
 6. **ConfirmDeleteView**: Confirmation dialog for deleting lorebooks (NEW!)
+7. **CharacterManagementView**: Interactive view for managing AI characters (NEW!)
+8. **UserCharacterManagementView**: Interactive view for managing user characters (NEW!)
+9. **CreateCharacterModal**: Modal form for creating AI characters (NEW!)
+10. **CreateUserCharacterModal**: Modal form for creating user characters (NEW!)
+11. **ConfirmCharacterDeleteView**: Confirmation dialog for deleting characters (NEW!)
+12. **ConfirmUserCharacterDeleteView**: Confirmation dialog for deleting user characters (NEW!)
 
 ### Configuration Changes
 - Changes made through modals are immediately saved to `config.json`
 - The bot's AI handler will use the new settings for subsequent requests
 - No bot restart is required
-- Lorebook changes take effect immediately in ongoing conversations
+- Lorebook and character changes take effect immediately in ongoing conversations
 
 ### Limitations
 
 Current limitations of the interactive configuration system:
 
-1. **View-Only for Some Categories**: Characters, user characters, and presets are currently view-only through the menu
+1. **View-Only for Presets**: Presets are currently view-only through the menu
 2. **Full Management for Lorebooks**: ✅ Lorebooks can now be fully managed interactively! (NEW!)
-3. **Full Management Still Requires Commands**: For adding/deleting/editing characters, use the respective commands
+3. **Full Management for Characters**: ✅ AI and User characters can now be fully managed interactively! (NEW!)
 4. **GUI Still Needed for Complex Operations**: Creating presets with multiple message blocks is easier through the GUI
+5. **Character Editing**: Characters can be created and deleted but not edited yet (coming soon!)
 
 ## Future Enhancements
 
 Potential future improvements to the interactive configuration system:
 
-- Add/Edit/Delete AI characters through modals
-- Add/Edit/Delete user characters through modals
+- Edit existing AI and user characters through modals
 - Preset management with select menus
 - ~~Lorebook entry management~~ ✅ **COMPLETED!**
+- ~~AI character creation and deletion~~ ✅ **COMPLETED!**
+- ~~User character creation and deletion~~ ✅ **COMPLETED!**
 - Reconnection settings modification
 - Token management through modal
 - Delete individual lorebook entries interactively
+- Batch operations for multiple items
 
 ## Troubleshooting
 

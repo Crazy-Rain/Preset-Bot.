@@ -35,10 +35,11 @@ This is a Discord bot with AI response capabilities and manual send features. Th
 - `!config` command opens an interactive menu with buttons
 - Configure OpenAI settings through a modal form (Base URL, API Key, Model)
 - **Full Lorebook Management**: Create, activate/deactivate, add entries, view, and delete lorebooks (NEW!)
-- View AI characters, user characters, and presets
-- View bot settings including reconnection configuration
+- **Full Character Management**: Create, view details, and delete AI and user characters (NEW!)
+- View presets and bot settings
 - Admin-only access for security
 - No need to stop the bot or open GUI on the host machine
+- Everything configurable from Discord with intuitive modals and buttons!
 
 ### 3. Automatic Reconnection (NEW!)
 - Automatic retry on connection failures with exponential backoff
